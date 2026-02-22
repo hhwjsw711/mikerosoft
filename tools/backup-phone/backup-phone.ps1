@@ -158,7 +158,7 @@ function Wait-ConversionJobs {
             if ($j.Process.HasExited) { $done += $j }
         }
         foreach ($j in $done) {
-            if ($j.Process.ExitCode -eq 0 -and (Test-Path $j.FinalPath)) {
+            if (Test-Path $j.FinalPath) {
                 Remove-Item $j.StagedPath -Force -ErrorAction SilentlyContinue
                 $script:totalConverted++
                 Write-Host "    $($j.DestNameFinal) (converted)" -ForegroundColor Green

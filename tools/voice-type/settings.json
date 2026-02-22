@@ -1,4 +1,4 @@
 {
-  "final_model": "small.en",
-  "stream_model": "tiny.en"
+  "final_model": "small",
+  "stream_model": "tiny"
 }

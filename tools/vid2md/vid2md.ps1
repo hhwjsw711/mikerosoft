@@ -49,7 +49,7 @@ function Invoke-Conversion([string]$url) {
     $body     = @{ url = $url } | ConvertTo-Json -Compress
     $response = Invoke-RestMethod `
         -Method Post `
-        -Uri "https://quirky-squirrel-220.convex.site/api/markdown" `
+        -Uri "https://compassionate-fennec-144.convex.site/api/markdown" `
         -Body $body `
         -ContentType "application/json" `
         -ErrorAction Stop
@@ -167,7 +167,7 @@ function Show-UI([string]$preset = "") {
             param($u)
             $b = @{ url = $u } | ConvertTo-Json -Compress
             Invoke-RestMethod -Method Post `
-                -Uri "https://quirky-squirrel-220.convex.site/api/markdown" `
+                -Uri "https://compassionate-fennec-144.convex.site/api/markdown" `
                 -Body $b -ContentType "application/json" -ErrorAction Stop
         }).AddArgument($url)
         $script:bgAsync = $script:bgPs.BeginInvoke()

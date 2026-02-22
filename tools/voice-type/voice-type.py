@@ -81,11 +81,11 @@ STREAM_MIN_AUDIO = 0.8    # don't start streaming until this many seconds record
 #   CPU → "small.en"        ~0.5–1.5s depending on clip length
 #   GPU → "large-v3-turbo"  ~0.2s on CUDA
 GPU_MODEL    = "large-v3-turbo"
-CPU_MODEL    = "small.en"
+CPU_MODEL    = "small"
 
 # Streaming preview model (speed over accuracy — visual feedback only):
 # tiny.en runs in ~0.1s on CPU so it never meaningfully blocks the final pass.
-STREAM_MODEL = "tiny.en"
+STREAM_MODEL = "tiny"
 
 SAMPLE_RATE  = 16000
 CHANNELS     = 1
@@ -95,9 +95,9 @@ COMPUTE_TYPE = "float16"  # float16 on GPU; overridden to int8 on CPU
 
 # Models available in the tray settings menu.
 # Final model: accuracy matters most; stream model: speed matters most.
-FINAL_MODEL_OPTIONS  = ["tiny.en", "base.en", "small.en", "medium.en",
+FINAL_MODEL_OPTIONS  = ["tiny", "base", "small", "medium",
                         "large-v2", "large-v3", "large-v3-turbo"]
-STREAM_MODEL_OPTIONS = ["tiny.en", "base.en", "small.en"]
+STREAM_MODEL_OPTIONS = ["tiny", "base", "small"]
 
 # ---------------------------------------------------------------------------
 # Settings (persisted to settings.json beside the script)
@@ -812,7 +812,8 @@ def transcribe(audio: np.ndarray, verbose: bool = True) -> str:
     model    = get_model()
     segments, info = model.transcribe(
         audio,
-        language="en",
+        language="zh",
+        initial_prompt="以下是普通话的句子。",
         vad_filter=False,
         beam_size=1,
         condition_on_previous_text=False,
@@ -865,7 +866,8 @@ class StreamingTranscriber:
                 t0 = time.perf_counter()
                 # Use the dedicated stream model — never contends with _model_lock
                 segs, _ = model.transcribe(
-                    audio, language="en", vad_filter=False,
+                    audio, language="zh", initial_prompt="以下是普通话的句子。",
+                    vad_filter=False,
                     beam_size=1, condition_on_previous_text=False,
                 )
                 text = " ".join(s.text.strip() for s in segs).strip()

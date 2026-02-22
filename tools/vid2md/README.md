@@ -63,7 +63,7 @@ None. Uses built-in PowerShell (`Invoke-RestMethod`, `Set-Clipboard`) and Window
 
 ## API
 
-`POST https://quirky-squirrel-220.convex.site/api/markdown`
+`POST https://compassionate-fennec-144.convex.site/api/markdown`
 
 Request:
 ```json

@@ -41,7 +41,7 @@ if (Test-Path $dotEnvPath) {
     Write-Host "  [env]  No .env found - copy .env.example to .env and fill in your keys." -ForegroundColor Yellow
 }
 
-# Hard-fail if OPENROUTER_API_KEY is missing (required by video-titles and future AI tools).
+# Hard-fail if OPENROUTER_API_KEY is missing (required by OpenRouter-backed AI tools).
 if (-not $env:OPENROUTER_API_KEY) {
     Write-Host ""
     Write-Host "ERROR: OPENROUTER_API_KEY is not set." -ForegroundColor Red
@@ -339,6 +339,7 @@ $descriptionIco = "$iconsOut\video-description.ico"
 $imgToSvgIco    = "$iconsOut\img-to-svg.ico"
 $viewer3dIco    = "$iconsOut\3d-viewer.ico"
 $imgGenIco      = "$iconsOut\img-gen.ico"
+$videoGenIco    = "$iconsOut\video-gen.ico"
 $faceSwapIco    = "$iconsOut\face-swap.ico"
 ConvertTo-Ico "$RepoDir\tools\transcribe\icons\wrench.png"                        $wrenchIco
 ConvertTo-Ico "$RepoDir\tools\transcribe\icons\film.png"                          $filmIco
@@ -352,6 +353,7 @@ ConvertTo-Ico "$RepoDir\tools\video-description\icons\video-description.png"    
 ConvertTo-Ico "$RepoDir\tools\img-to-svg\icons\img-to-svg.png"                   $imgToSvgIco
 ConvertTo-Ico "$RepoDir\tools\3d-viewer\icons\3d-viewer.png"                     $viewer3dIco
 ConvertTo-Ico "$RepoDir\tools\img-gen\icons\img-gen.png"                          $imgGenIco
+ConvertTo-Ico "$RepoDir\tools\video-gen\icons\video-gen.png"                      $videoGenIco
 ConvertTo-Ico "$RepoDir\tools\face-swap\icons\face-swap.png"                      $faceSwapIco
 Write-Host "  [ico]  Icons written to $iconsOut" -ForegroundColor Green
 
@@ -426,6 +428,7 @@ $dirRoot = "HKCU:\Software\Classes\Directory\shell\MikesTools"
 Set-MikesToolsRoot $dirRoot $wrenchIco
 Add-MikesVerb $dirRoot "GhOpen"           "Open on GitHub"     $worldIco       'cmd.exe /k "cd /d "%1" && "C:\dev\tools\ghopen.bat""'
 Add-MikesVerb $dirRoot "ImgGen"           "Image Gen"          $imgGenIco      "wscript.exe `"$RepoDir\tools\img-gen\img-gen.vbs`" `"%1`""
+Add-MikesVerb $dirRoot "VideoGen"         "Video Gen"          $videoGenIco    "wscript.exe `"$RepoDir\tools\video-gen\video-gen.vbs`" `"%1`""
 Add-MikesVerb $dirRoot "FaceSwap"         "Face Swap"          $faceSwapIco    "wscript.exe `"$RepoDir\tools\face-swap\face-swap.vbs`" `"%1`""
 Add-MikesVerb $dirRoot "VideoDescription" "Video Description"  $descriptionIco 'cmd.exe /k ""C:\dev\tools\video-description.bat" "%1""'
 Add-MikesVerb $dirRoot "Vid2md"           "Video to Markdown"  $linkPageIco    $vid2mdCmd
@@ -435,6 +438,7 @@ $bgRoot = "HKCU:\Software\Classes\Directory\Background\shell\MikesTools"
 Set-MikesToolsRoot $bgRoot $wrenchIco
 Add-MikesVerb $bgRoot "GhOpen"           "Open on GitHub"     $worldIco       'cmd.exe /k "cd /d "%V" && "C:\dev\tools\ghopen.bat""'
 Add-MikesVerb $bgRoot "ImgGen"           "Image Gen"          $imgGenIco      "wscript.exe `"$RepoDir\tools\img-gen\img-gen.vbs`" `"%V`""
+Add-MikesVerb $bgRoot "VideoGen"         "Video Gen"          $videoGenIco    "wscript.exe `"$RepoDir\tools\video-gen\video-gen.vbs`" `"%V`""
 Add-MikesVerb $bgRoot "FaceSwap"         "Face Swap"          $faceSwapIco    "wscript.exe `"$RepoDir\tools\face-swap\face-swap.vbs`" `"%V`""
 Add-MikesVerb $bgRoot "VideoDescription" "Video Description"  $descriptionIco 'cmd.exe /k ""C:\dev\tools\video-description.bat" "%V""'
 Add-MikesVerb $bgRoot "Vid2md"           "Video to Markdown"  $linkPageIco    'cmd.exe /k "C:\dev\tools\video-to-markdown.bat"'

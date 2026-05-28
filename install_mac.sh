@@ -89,6 +89,7 @@ link_tool transcribe tools/transcribe/transcribe
 link_tool 3d-viewer tools/3d-viewer/3d-viewer
 link_tool face-swap tools/face-swap/face-swap
 link_tool img-gen tools/img-gen/img-gen
+link_tool video-gen tools/video-gen/video-gen
 
 echo ""
 echo "Done."
@@ -106,6 +107,6 @@ esac
 echo ""
 echo "Still need: bun (Bun tools), python3, repo-root .env with OPENROUTER_API_KEY for AI CLIs."
 echo "Transcribe (Mac): run bash tools/transcribe/deps.sh once (ffmpeg + faster-whisper)."
-echo "Electrobun apps: use 3d-viewer, face-swap, img-gen from PATH after bun install (see --with-bun-install)."
+echo "Electrobun apps: use 3d-viewer, face-swap, img-gen, video-gen from PATH after bun install (see --with-bun-install)."
 echo "Per-tool Python deps: run each tools/<name>/deps.ps1 under PowerShell on Windows,"
 echo "or install the same packages with pip on this Mac (see each tool README)."

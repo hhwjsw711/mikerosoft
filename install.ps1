@@ -136,6 +136,26 @@ Write-BatStub "ctxmenu" @"
 wscript.exe "$RepoDir\tools\ctxmenu\ctxmenu.vbs"
 "@
 
+$ctxVbsPath = "$RepoDir\tools\ctxmenu\ctxmenu.vbs"
+$ctxWsh = New-Object -ComObject WScript.Shell
+$ctxStartMenuNames = @(
+    "Context Menu",
+    "ContextMenu",
+    "ctx",
+    "ctxmenu"
+)
+foreach ($ctxName in $ctxStartMenuNames) {
+    $ctxStartMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$ctxName.lnk"
+    $ctxSc = $ctxWsh.CreateShortcut($ctxStartMenuPath)
+    $ctxSc.TargetPath       = "wscript.exe"
+    $ctxSc.Arguments        = "`"$ctxVbsPath`""
+    $ctxSc.WorkingDirectory = "$RepoDir\tools\ctxmenu"
+    $ctxSc.Description      = "Context Menu Manager"
+    $ctxSc.IconLocation     = "%SystemRoot%\System32\imageres.dll,109"
+    $ctxSc.Save()
+    Write-Host "  [lnk]  $ctxStartMenuPath" -ForegroundColor Green
+}
+
 # ---------------------------------------------------------------------------
 # backup-phone
 # ---------------------------------------------------------------------------
@@ -291,6 +311,23 @@ $vtSc.Description      = "Push-to-talk voice typing: hold Right Ctrl to record, 
 $vtSc.IconLocation     = "%SystemRoot%\System32\imageres.dll,109"
 $vtSc.Save()
 Write-Host "  [lnk]  $vtShortcutPath" -ForegroundColor Green
+
+$vtStartMenuNames = @(
+    "Voice Type",
+    "VoiceType",
+    "voice"
+)
+foreach ($vtName in $vtStartMenuNames) {
+    $vtStartMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\$vtName.lnk"
+    $vtSmSc = $wsh.CreateShortcut($vtStartMenuPath)
+    $vtSmSc.TargetPath       = "wscript.exe"
+    $vtSmSc.Arguments        = "`"$vtVbsPath`""
+    $vtSmSc.WorkingDirectory = "$RepoDir\tools\voice-type"
+    $vtSmSc.Description      = "Push-to-talk voice typing: hold Right Ctrl to record, release to transcribe and paste"
+    $vtSmSc.IconLocation     = "%SystemRoot%\System32\imageres.dll,109"
+    $vtSmSc.Save()
+    Write-Host "  [lnk]  $vtStartMenuPath" -ForegroundColor Green
+}
 
 # ---------------------------------------------------------------------------
 # Context menu - "Mike's Tools" submenu in File Explorer

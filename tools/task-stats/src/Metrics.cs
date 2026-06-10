@@ -126,7 +126,7 @@ public sealed class LiveMetricsSource : IMetricsSource {
         try {
             if (Native.NvmlInit() == 0 && Native.NvmlGetDevice(0, out _nvDev) == 0)
                 _nvmlOk = true;
-        } catch { _nvmlOk = false; }
+        } catch { _nvmlOk = false; /* nvml.dll missing or incompatible GPU */ }
 
         // Rate-based PerformanceCounters always return 0 on the very first call.
         // Call NextValue() once now so the first real Sample() shows correct values.
@@ -257,7 +257,7 @@ public sealed class LiveMetricsSource : IMetricsSource {
         if (_pcCores != null) foreach (var p in _pcCores) if (p != null) p.Dispose();
         if (_pcMem   != null) _pcMem.Dispose();
         if (_netCounters != null) foreach (var n in _netCounters) if (n != null) n.Dispose();
-        if (_nvmlOk) { try { Native.NvmlShutdown(); } catch { } }
+        if (_nvmlOk) { try { Native.NvmlShutdown(); } catch { /* driver may be unloaded already */ } }
     }
 }
 

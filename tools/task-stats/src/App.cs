@@ -54,7 +54,9 @@ public static class App {
 
     internal static void ApplyStartup(bool enable, string scriptDir, IStartupRegistration startupRegistration) {
         try { if (startupRegistration != null) startupRegistration.Apply(enable, scriptDir); }
-        catch { }
+        catch (Exception ex) {
+            System.Diagnostics.Debug.WriteLine($"[ApplyStartup] Failed: {ex.Message}");
+        }
     }
 }
 

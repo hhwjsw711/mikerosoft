@@ -42,3 +42,9 @@ __pycache__/
 .vs/
 Thumbs.db
 desktop.ini
+
+# Socket files (e.g. voice-type-control.sock on macOS)
+*.sock
+
+# Test temp directories
+tools/video-to-markdown/tests/tmp/

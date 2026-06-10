@@ -149,6 +149,7 @@ public sealed class LiveSectionContextProvider : ISectionContextProvider {
                     }
                 }
             } catch {
+                // Access denied to some processes (e.g. SYSTEM-owned) is normal
             } finally {
                 process.Dispose();
             }
@@ -194,6 +195,7 @@ public sealed class LiveSectionContextProvider : ISectionContextProvider {
     }
 
     public void Dispose() {
+        // No managed resources to release; SectionContext only reads transient process data.
     }
 
     static string SafeProcessName(Process process) {

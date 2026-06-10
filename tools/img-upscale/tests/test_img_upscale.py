@@ -89,19 +89,30 @@ class ImgUpscaleTests(unittest.TestCase):
             self.module.normalize_tile_size_choice("250")
 
     def test_build_tile_starts_covers_dimension(self):
-        self.assertEqual([0], self.module.build_tile_starts(length=128, tile_size=256, tile_overlap=32))
-        self.assertEqual([0, 144], self.module.build_tile_starts(length=400, tile_size=256, tile_overlap=32))
-        self.assertEqual([0, 192, 384, 576, 744], self.module.build_tile_starts(length=1000, tile_size=256, tile_overlap=32))
+        self.assertEqual(
+            [0],
+            self.module.build_tile_starts(length=128, tile_size=256, tile_overlap=32),
+        )
+        self.assertEqual(
+            [0, 144],
+            self.module.build_tile_starts(length=400, tile_size=256, tile_overlap=32),
+        )
+        self.assertEqual(
+            [0, 192, 384, 576, 744],
+            self.module.build_tile_starts(length=1000, tile_size=256, tile_overlap=32),
+        )
 
     def test_build_fast_command_uses_expected_binary_and_model(self):
         command = self.module.build_fast_upscale_command(
-            exe_dir=pathlib.Path(r"C:\dev\tools"),
+            exe_dir=pathlib.Path(r"E:\dev\tools"),
             input_path=pathlib.Path("input.png"),
             output_path=pathlib.Path("output.png"),
             scale=4,
         )
 
-        self.assertEqual(pathlib.Path(r"C:\dev\tools\realesrgan-ncnn-vulkan.exe"), command[0])
+        self.assertEqual(
+            pathlib.Path(r"E:\dev\tools\realesrgan-ncnn-vulkan.exe"), command[0]
+        )
         self.assertIn("-n", command)
         self.assertIn("realesrgan-x4plus", command)
         self.assertEqual("4", command[-1])

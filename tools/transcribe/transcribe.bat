@@ -2,15 +2,15 @@
 setlocal enabledelayedexpansion
 
 if "%~1"=="" (
-    echo Usage: transcribe ^<video_file^> [--cpu]
-    echo Example: transcribe c:/videos/video.mp4
-    echo          transcribe c:/videos/video.mp4 --cpu
+echo Usage: transcribe ^<video_file^> [--cuda]
+echo Example: transcribe c:/videos/video.mp4
+echo          transcribe c:/videos/video.mp4 --cuda
     exit /b 1
 )
 
 set "VIDEO_FILE=%~1"
-set "DEVICE=cuda"
-if /i "%~2"=="--cpu" set "DEVICE=cpu"
+set "DEVICE=cpu"
+if /i "%~2"=="--cuda" set "DEVICE=cuda"
 
 rem EXEDIR is injected by the stub in c:\dev\tools and points to the directory
 rem containing ffmpeg.exe, faster-whisper-xxl.exe and the _models folder.
@@ -34,29 +34,13 @@ if errorlevel 1 (
 echo Transcribing audio (device: !DEVICE!)...
 set "TEMP_OUTPUT_DIR=%TEMP%\transcribe_output_%RANDOM%"
 mkdir "!TEMP_OUTPUT_DIR!" 2>nul
-if /i "!DEVICE!"=="cuda" (
-    "%EXEDIR%faster-whisper-xxl.exe" --model_dir "%EXEDIR%_models" --device !DEVICE! --compute_type float16 --output_dir "!TEMP_OUTPUT_DIR!" --output_format srt "!TEMP_AUDIO!"
-) else (
-    "%EXEDIR%faster-whisper-xxl.exe" --model_dir "%EXEDIR%_models" --device !DEVICE! --output_dir "!TEMP_OUTPUT_DIR!" --output_format srt "!TEMP_AUDIO!"
-)
+"%EXEDIR%faster-whisper-xxl.exe" --model_dir "%EXEDIR%_models" --device !DEVICE! --output_dir "!TEMP_OUTPUT_DIR!" --output_format=srt "!TEMP_AUDIO!"
 
 if errorlevel 1 (
-    if /i "!DEVICE!"=="cuda" (
-        echo.
-        echo CUDA failed, retrying with CPU...
-        "%EXEDIR%faster-whisper-xxl.exe" --model_dir "%EXEDIR%_models" --device cpu --output_dir "!TEMP_OUTPUT_DIR!" --output_format srt "!TEMP_AUDIO!"
-        if errorlevel 1 (
-            echo Error: Transcription failed on both CUDA and CPU
-            del "!TEMP_AUDIO!" 2>nul
-            rmdir /s /q "!TEMP_OUTPUT_DIR!" 2>nul
-            exit /b 1
-        )
-    ) else (
-        echo Error: Transcription failed
-        del "!TEMP_AUDIO!" 2>nul
-        rmdir /s /q "!TEMP_OUTPUT_DIR!" 2>nul
-        exit /b 1
-    )
+    echo Error: Transcription failed
+    del "!TEMP_AUDIO!" 2>nul
+    rmdir /s /q "!TEMP_OUTPUT_DIR!" 2>nul
+    exit /b 1
 )
 
 del "!TEMP_AUDIO!" 2>nul

@@ -25,7 +25,9 @@ public sealed class FileSettingsStore : ISettingsStore {
     public Settings Load() {
         try {
             if (File.Exists(_path)) return Settings.Parse(File.ReadAllText(_path));
-        } catch { }
+        } catch (Exception ex) {
+            System.Diagnostics.Debug.WriteLine($"[SettingsStore] Load failed: {ex.Message}");
+        }
         return new Settings();
     }
 
@@ -33,7 +35,9 @@ public sealed class FileSettingsStore : ISettingsStore {
         try {
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(_path));
             File.WriteAllText(_path, settings.Serialize());
-        } catch { }
+        } catch (Exception ex) {
+            System.Diagnostics.Debug.WriteLine($"[SettingsStore] Save failed: {ex.Message}");
+        }
     }
 }
 

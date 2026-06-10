@@ -205,7 +205,9 @@ public class OverlayForm : Form {
             }
 
             return left;
-        } catch { }
+        } catch (Exception ex) {
+            System.Diagnostics.Debug.WriteLine($"[TrayLeftEdge] Failed: {ex.Message}");
+        }
         return scr.Bounds.Right;
     }
 

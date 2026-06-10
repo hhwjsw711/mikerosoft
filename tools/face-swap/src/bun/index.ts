@@ -35,15 +35,9 @@ const toolDir =
 // face-swap-runner.bat does: python face-swap.py %* — same pattern as img-upscale.bat in this repo
 const runnerBat = path.join(toolDir, "face-swap-runner.bat");
 
-const localAppData =
-  process.env["LOCALAPPDATA"] ??
-  process.env["USERPROFILE"] + "\\AppData\\Local";
-const modelPath = path.join(
-  localAppData,
-  "face-swap",
-  "models",
-  "inswapper_128.onnx",
-);
+const repoRoot = path.resolve(toolDir, "..", "..");
+const toolsDir = path.resolve(repoRoot, "..", "..", "tools");
+const modelPath = path.join(toolsDir, "_models", "face-swap", "inswapper_128.onnx");
 
 // ---------------------------------------------------------------------------
 // Python check - same pattern as img-upscale.bat / backup-phone.ps1 in this repo:
@@ -77,7 +71,7 @@ fs.mkdirSync(path.dirname(logPath), { recursive: true });
 
 function log(msg: string) {
   const line = `${new Date().toISOString()} ${msg}\n`;
-  fs.appendFileSync(logPath, line);
+  fs.appendFile(logPath, line, () => {});
   console.log(msg);
 }
 
@@ -531,3 +525,7 @@ for (const delay of [150, 500, 1000]) {
     pulseWindowSize();
   }, delay);
 }
+
+process.on("exit", () => {
+  try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+});

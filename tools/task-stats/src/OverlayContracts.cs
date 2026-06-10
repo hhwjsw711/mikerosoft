@@ -15,7 +15,9 @@ public interface IProcessLauncher {
 
 public sealed class ProcessLauncher : IProcessLauncher {
     public void Launch(string command) {
-        try { Process.Start(command); } catch { }
+        try { Process.Start(command); } catch (Exception ex) {
+            System.Diagnostics.Debug.WriteLine($"[ProcessLauncher] Failed to launch '{command}': {ex.Message}");
+        }
     }
 }
 

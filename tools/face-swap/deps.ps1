@@ -52,8 +52,10 @@ if ($cvOk -eq "ok") {
 }
 
 # Check model file
-$modelsDir = "$env:LOCALAPPDATA\face-swap\models"
-$modelPath  = "$modelsDir\inswapper_128.onnx"
+$repoRoot = Resolve-Path "$PSScriptRoot\..\.."
+$toolsDir = Resolve-Path "$repoRoot\..\..\tools"
+$modelsDir = "$toolsDir\_models\face-swap"
+$modelPath = "$modelsDir\inswapper_128.onnx"
 
 New-Item -ItemType Directory -Force -Path $modelsDir | Out-Null
 

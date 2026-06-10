@@ -3,15 +3,29 @@ var __getProtoOf = Object.getPrototypeOf;
 var __defProp = Object.defineProperty;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
+function __accessProp(key) {
+  return this[key];
+}
+var __toESMCache_node;
+var __toESMCache_esm;
 var __toESM = (mod, isNodeMode, target) => {
+  var canCache = mod != null && typeof mod === "object";
+  if (canCache) {
+    var cache = isNodeMode ? __toESMCache_node ??= new WeakMap : __toESMCache_esm ??= new WeakMap;
+    var cached = cache.get(mod);
+    if (cached)
+      return cached;
+  }
   target = mod != null ? __create(__getProtoOf(mod)) : {};
   const to = isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target;
   for (let key of __getOwnPropNames(mod))
     if (!__hasOwnProp.call(to, key))
       __defProp(to, key, {
-        get: () => mod[key],
+        get: __accessProp.bind(mod, key),
         enumerable: true
       });
+  if (canCache)
+    cache.set(mod, to);
   return to;
 };
 var __commonJS = (cb, mod) => () => (mod || cb((mod = { exports: {} }).exports, mod), mod.exports);
@@ -1096,7 +1110,7 @@ See https://react.dev/link/invalid-hook-call for tips about how to debug and fix
     exports.useTransition = function() {
       return resolveDispatcher().useTransition();
     };
-    exports.version = "19.2.4";
+    exports.version = "19.2.7";
     typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop === "function" && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
   })();
 });
@@ -1286,7 +1300,7 @@ See https://react.dev/link/invalid-hook-call for tips about how to debug and fix
     exports.useFormStatus = function() {
       return resolveDispatcher().useHostTransitionStatus();
     };
-    exports.version = "19.2.4";
+    exports.version = "19.2.7";
     typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop === "function" && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
   })();
 });
@@ -16775,10 +16789,10 @@ Check the top-level render call using <` + componentName2 + ">.");
     };
     (function() {
       var isomorphicReactPackageVersion = React.version;
-      if (isomorphicReactPackageVersion !== "19.2.4")
+      if (isomorphicReactPackageVersion !== "19.2.7")
         throw Error(`Incompatible React versions: The "react" and "react-dom" packages must have the exact same version. Instead got:
   - react:      ` + (isomorphicReactPackageVersion + `
-  - react-dom:  19.2.4
+  - react-dom:  19.2.7
 Learn more: https://react.dev/warnings/version-mismatch`));
     })();
     typeof Map === "function" && Map.prototype != null && typeof Map.prototype.forEach === "function" && typeof Set === "function" && Set.prototype != null && typeof Set.prototype.clear === "function" && typeof Set.prototype.forEach === "function" || console.error("React depends on Map and Set built-in types. Make sure that you load a polyfill in older browsers. https://react.dev/link/react-polyfills");
@@ -16798,10 +16812,10 @@ Learn more: https://react.dev/warnings/version-mismatch`));
     if (!function() {
       var internals = {
         bundleType: 1,
-        version: "19.2.4",
+        version: "19.2.7",
         rendererPackageName: "react-dom",
         currentDispatcherRef: ReactSharedInternals,
-        reconcilerVersion: "19.2.4"
+        reconcilerVersion: "19.2.7"
       };
       internals.overrideHookState = overrideHookState;
       internals.overrideHookStateDeletePath = overrideHookStateDeletePath;
@@ -16861,7 +16875,7 @@ You might need to use a local HTTP server (instead of file://): https://react.de
       listenToAllSupportedEvents(container);
       return new ReactDOMHydrationRoot(initialChildren);
     };
-    exports.version = "19.2.4";
+    exports.version = "19.2.7";
     typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== "undefined" && typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop === "function" && __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(Error());
   })();
 });
@@ -17337,6 +17351,9 @@ class Electroview {
     }
   }
   initSocketToBun() {
+    if (!RPC_SOCKET_PORT || !WEBVIEW_ID) {
+      return;
+    }
     const socket = new WebSocket(`ws://localhost:${RPC_SOCKET_PORT}/socket?webviewId=${WEBVIEW_ID}`);
     this.bunSocket = socket;
     socket.addEventListener("open", () => {});
@@ -17443,9 +17460,6 @@ async function fileToDataUrl(file) {
     reader.readAsDataURL(file);
   });
 }
-function isImageFile(file) {
-  return file.type.startsWith("image/");
-}
 function getFilePath(file) {
   const desktopFile = file;
   return desktopFile.path;
@@ -17453,9 +17467,10 @@ function getFilePath(file) {
 function DropZone({
   label,
   sublabel,
-  dataUrl,
-  onImage,
-  disabled
+  media,
+  onMedia,
+  disabled,
+  acceptVideo = false
 }) {
   const [isDragOver, setIsDragOver] = import_react.useState(false);
   const inputRef = import_react.useRef(null);
@@ -17465,22 +17480,42 @@ function DropZone({
     if (disabled)
       return;
     const file = e.dataTransfer.files[0];
-    if (!file || !isImageFile(file))
+    if (!file)
       return;
-    onImage({
-      dataUrl: await fileToDataUrl(file),
+    if (!file.type.startsWith("image/") && (!acceptVideo || !file.type.startsWith("video/")))
+      return;
+    const isVideo = file.type.startsWith("video/");
+    const previewUrl = URL.createObjectURL(file);
+    let dataUrl = undefined;
+    const originalPath = getFilePath(file);
+    if (!isVideo || !originalPath) {
+      dataUrl = await fileToDataUrl(file);
+    }
+    onMedia({
+      previewUrl,
+      dataUrl,
       name: file.name,
-      originalPath: getFilePath(file)
+      originalPath,
+      isVideo
     });
-  }, [disabled, onImage]);
+  }, [disabled, onMedia, acceptVideo]);
   const handleFileChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file)
       return;
-    onImage({
-      dataUrl: await fileToDataUrl(file),
+    const isVideo = file.type.startsWith("video/");
+    const previewUrl = URL.createObjectURL(file);
+    let dataUrl = undefined;
+    const originalPath = getFilePath(file);
+    if (!isVideo || !originalPath) {
+      dataUrl = await fileToDataUrl(file);
+    }
+    onMedia({
+      previewUrl,
+      dataUrl,
       name: file.name,
-      originalPath: getFilePath(file)
+      originalPath,
+      isVideo
     });
     e.target.value = "";
   };
@@ -17494,8 +17529,8 @@ function DropZone({
       /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
         style: {
           ...dropZoneStyle,
-          borderColor: isDragOver ? "#2563eb" : dataUrl ? "#2a2a2a" : "#222",
-          background: isDragOver ? "#0f1e3a" : dataUrl ? "transparent" : "#141414",
+          borderColor: isDragOver ? "#2563eb" : media ? "#2a2a2a" : "#222",
+          background: isDragOver ? "#0f1e3a" : media ? "transparent" : "#141414",
           cursor: disabled ? "not-allowed" : "pointer"
         },
         onDragOver: (e) => {
@@ -17509,8 +17544,14 @@ function DropZone({
           if (!disabled)
             inputRef.current?.click();
         },
-        children: dataUrl ? /* @__PURE__ */ jsx_dev_runtime.jsxDEV("img", {
-          src: dataUrl,
+        children: media ? media.isVideo ? /* @__PURE__ */ jsx_dev_runtime.jsxDEV("video", {
+          src: media.previewUrl,
+          autoPlay: true,
+          loop: true,
+          muted: true,
+          style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6, display: "block" }
+        }, undefined, false, undefined, this) : /* @__PURE__ */ jsx_dev_runtime.jsxDEV("img", {
+          src: media.previewUrl,
           style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 6, display: "block" }
         }, undefined, false, undefined, this) : /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
           style: dropPlaceholderStyle,
@@ -17521,8 +17562,12 @@ function DropZone({
             }, undefined, false, undefined, this),
             /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
               style: { fontSize: 13, color: "#444" },
-              children: "Drop image here"
-            }, undefined, false, undefined, this),
+              children: [
+                "Drop ",
+                acceptVideo ? "image or video" : "image",
+                " here"
+              ]
+            }, undefined, true, undefined, this),
             /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
               style: { fontSize: 11, color: "#333", marginTop: 4 },
               children: "or click to browse"
@@ -17534,11 +17579,11 @@ function DropZone({
         style: { fontSize: 11, color: "#444", marginTop: 6, textAlign: "center" },
         children: sublabel
       }, undefined, false, undefined, this),
-      dataUrl && /* @__PURE__ */ jsx_dev_runtime.jsxDEV("button", {
+      media && /* @__PURE__ */ jsx_dev_runtime.jsxDEV("button", {
         style: clearBtnStyle,
         onClick: (e) => {
           e.stopPropagation();
-          onImage(null);
+          onMedia(null);
         },
         disabled,
         children: "clear"
@@ -17546,7 +17591,7 @@ function DropZone({
       /* @__PURE__ */ jsx_dev_runtime.jsxDEV("input", {
         ref: inputRef,
         type: "file",
-        accept: "image/*",
+        accept: acceptVideo ? "image/*,video/*" : "image/*",
         style: { display: "none" },
         onChange: handleFileChange
       }, undefined, false, undefined, this)
@@ -17571,9 +17616,11 @@ function App() {
     rpc.request.getConfig().then(({ initialTargetDataUrl, initialTargetPath, eventsUrl: url, modelMissing: missing, modelPath: mp, pythonMissing: pyMissing }) => {
       if (initialTargetDataUrl) {
         setTargetImage({
+          previewUrl: initialTargetDataUrl,
           dataUrl: initialTargetDataUrl,
           name: initialTargetPath?.split("\\").pop() ?? "target image",
-          originalPath: initialTargetPath
+          originalPath: initialTargetPath,
+          isVideo: false
         });
       }
       setModelMissing(missing);
@@ -17618,6 +17665,14 @@ function App() {
   const handleSwap = () => {
     if (!targetImage || !sourceImage || step !== 1)
       return;
+    if (!sourceImage.dataUrl) {
+      setError("Source image must be a valid image file.");
+      return;
+    }
+    if (targetImage.isVideo && !targetImage.originalPath && !targetImage.dataUrl) {
+      setError("Video file is missing data. Please try dragging and dropping it instead.");
+      return;
+    }
     const jobId = randomId();
     setStep(2);
     setError(null);
@@ -17626,6 +17681,7 @@ function App() {
     rpc.request.swap({
       jobId,
       targetDataUrl: targetImage.dataUrl,
+      targetPath: targetImage.originalPath,
       sourceDataUrl: sourceImage.dataUrl,
       targetOriginalPath: targetImage.originalPath
     }).catch((err) => {
@@ -17638,7 +17694,11 @@ function App() {
     const fileUrl = "file:///" + result.tempPath.replace(/\\/g, "/");
     e.dataTransfer.effectAllowed = "copy";
     e.dataTransfer.setData("text/uri-list", fileUrl);
-    e.dataTransfer.setData("DownloadURL", `image/png:face-swap-result.png:${fileUrl}`);
+    if (result.isVideo) {
+      e.dataTransfer.setData("DownloadURL", `video/mp4:face-swap-result.mp4:${fileUrl}`);
+    } else {
+      e.dataTransfer.setData("DownloadURL", `image/png:face-swap-result.png:${fileUrl}`);
+    }
   };
   const canSwap = Boolean(targetImage) && Boolean(sourceImage) && step === 1;
   return /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
@@ -17777,11 +17837,12 @@ function App() {
             style: panelsRowStyle,
             children: [
               /* @__PURE__ */ jsx_dev_runtime.jsxDEV(DropZone, {
-                label: "Target Image",
-                sublabel: "Face in this image gets replaced",
-                dataUrl: targetImage?.dataUrl ?? null,
-                onImage: setTargetImage,
-                disabled: false
+                label: "Target Media",
+                sublabel: "Face in this image or video gets replaced",
+                media: targetImage,
+                onMedia: setTargetImage,
+                disabled: false,
+                acceptVideo: true
               }, undefined, false, undefined, this),
               /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
                 style: arrowDividerStyle,
@@ -17790,8 +17851,8 @@ function App() {
               /* @__PURE__ */ jsx_dev_runtime.jsxDEV(DropZone, {
                 label: "Source Face",
                 sublabel: "Face to use from this image",
-                dataUrl: sourceImage?.dataUrl ?? null,
-                onImage: setSourceImage,
+                media: sourceImage,
+                onMedia: setSourceImage,
                 disabled: false
               }, undefined, false, undefined, this)
             ]
@@ -17808,7 +17869,17 @@ function App() {
               disabled: !canSwap,
               children: "Swap Faces"
             }, undefined, false, undefined, this)
-          }, undefined, false, undefined, this)
+          }, undefined, false, undefined, this),
+          error && /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
+            style: { ...errorBoxStyle, margin: "0 16px 16px" },
+            children: [
+              /* @__PURE__ */ jsx_dev_runtime.jsxDEV("strong", {
+                children: "Error:"
+              }, undefined, false, undefined, this),
+              " ",
+              error
+            ]
+          }, undefined, true, undefined, this)
         ]
       }, undefined, true, undefined, this),
       step === 2 && /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
@@ -17823,11 +17894,11 @@ function App() {
                 }, undefined, false, undefined, this),
                 /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
                   style: { fontSize: 18, fontWeight: 600, marginTop: 16 },
-                  children: "Generating Image..."
+                  children: "Generating..."
                 }, undefined, false, undefined, this),
                 /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
                   style: { fontSize: 13, color: "#888", marginTop: 8 },
-                  children: "This may take 10-30 seconds."
+                  children: "This may take 10-30 seconds for images, or longer for videos."
                 }, undefined, false, undefined, this)
               ]
             }, undefined, true, undefined, this) : /* @__PURE__ */ jsx_dev_runtime.jsxDEV(jsx_dev_runtime.Fragment, {
@@ -17886,7 +17957,16 @@ function App() {
         children: [
           /* @__PURE__ */ jsx_dev_runtime.jsxDEV("div", {
             style: { flex: 1, minHeight: 0, padding: 24, display: "flex", alignItems: "center", justifyContent: "center" },
-            children: /* @__PURE__ */ jsx_dev_runtime.jsxDEV("img", {
+            children: result.isVideo ? /* @__PURE__ */ jsx_dev_runtime.jsxDEV("video", {
+              src: result.serveUrl,
+              autoPlay: true,
+              loop: true,
+              controls: true,
+              style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.4)" },
+              draggable: true,
+              onDragStart: handleResultDragStart,
+              title: "Drag to save"
+            }, undefined, false, undefined, this) : /* @__PURE__ */ jsx_dev_runtime.jsxDEV("img", {
               src: result.serveUrl,
               style: { maxWidth: "100%", maxHeight: "100%", objectFit: "contain", borderRadius: 8, boxShadow: "0 4px 24px rgba(0,0,0,0.4)" },
               draggable: true,

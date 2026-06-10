@@ -6,7 +6,7 @@
 # Skips files that already exist in the destination.
 
 param(
-    [string]$Destination = "D:\bak\photos",
+    [string]$Destination = "E:\bak\photos",
     [string]$DeviceName = "Apple iPhone",
     [switch]$Yes
 )

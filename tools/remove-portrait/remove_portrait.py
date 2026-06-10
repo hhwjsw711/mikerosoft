@@ -21,8 +21,25 @@ DEFAULT_PRORES_ALPHA_BITS = 8
 DEFAULT_MAX_WIDTH = 0
 DEFAULT_SHRINK = 1
 DEFAULT_BLUR = 1.0
-VIDEO_EXTENSIONS = {".mp4", ".mkv", ".avi", ".mov", ".wmv", ".webm", ".m4v", ".mpg", ".mpeg", ".ts", ".mts", ".m2ts", ".flv", ".f4v"}
-RVM_MODEL_DIR = Path(r"C:\dev\tools\_models\remove-portrait")
+VIDEO_EXTENSIONS = {
+    ".mp4",
+    ".mkv",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".webm",
+    ".m4v",
+    ".mpg",
+    ".mpeg",
+    ".ts",
+    ".mts",
+    ".m2ts",
+    ".flv",
+    ".f4v",
+}
+_repo_root = Path(__file__).resolve().parents[2]
+_tools = _repo_root.parent.parent / "tools"
+RVM_MODEL_DIR = _tools / "_models" / "remove-portrait"
 RVM_REPO = RVM_MODEL_DIR / "RobustVideoMatting"
 RVM_WEIGHTS = RVM_MODEL_DIR / "rvm_mobilenetv3.pth"
 
@@ -44,10 +61,9 @@ def preload_onnxruntime_gpu_dlls() -> None:
 
 
 def find_ffmpeg() -> Path:
-    exe_dir = Path(__file__).resolve().parents[2]
     candidates = [
-        Path(r"C:\dev\tools\ffmpeg.exe"),
-        exe_dir / "ffmpeg.exe",
+        _tools / "ffmpeg.exe",
+        Path(__file__).resolve().parents[2] / "ffmpeg.exe",
     ]
     for candidate in candidates:
         if candidate.exists():
@@ -57,10 +73,14 @@ def find_ffmpeg() -> Path:
     if found:
         return Path(found)
 
-    raise FileNotFoundError("ffmpeg.exe was not found. Put it in C:\\dev\\tools or on PATH.")
+    raise FileNotFoundError(
+        "ffmpeg.exe was not found. Put it in C:\\dev\\tools or on PATH."
+    )
 
 
-def build_default_output_path(input_path: Path, max_width: int, suffix: str = "_portrait_removed") -> Path:
+def build_default_output_path(
+    input_path: Path, max_width: int, suffix: str = "_portrait_removed"
+) -> Path:
     width_part = f"_{max_width}w" if max_width > 0 else ""
     candidate = input_path.with_name(f"{input_path.stem}{suffix}{width_part}.mov")
     if not candidate.exists():
@@ -68,7 +88,9 @@ def build_default_output_path(input_path: Path, max_width: int, suffix: str = "_
 
     counter = 2
     while True:
-        numbered = input_path.with_name(f"{input_path.stem}{suffix}{width_part}_{counter}.mov")
+        numbered = input_path.with_name(
+            f"{input_path.stem}{suffix}{width_part}_{counter}.mov"
+        )
         if not numbered.exists():
             return numbered
         counter += 1
@@ -82,7 +104,9 @@ def normalize_model(model: str) -> str:
     value = model.strip() if model else DEFAULT_MODEL
     allowed = {"u2net_human_seg", "isnet-general-use", "birefnet-portrait"}
     if value not in allowed:
-        raise ValueError(f"Unsupported model: {model}. Choose one of: {', '.join(sorted(allowed))}")
+        raise ValueError(
+            f"Unsupported model: {model}. Choose one of: {', '.join(sorted(allowed))}"
+        )
     return value
 
 
@@ -133,7 +157,14 @@ def checkerboard(size: tuple[int, int], tile: int = 24) -> Image.Image:
     return image
 
 
-def build_alpha_mov_command(ffmpeg: Path, frame_pattern: Path, input_path: Path, output_path: Path, fps: float, include_audio: bool) -> list[str]:
+def build_alpha_mov_command(
+    ffmpeg: Path,
+    frame_pattern: Path,
+    input_path: Path,
+    output_path: Path,
+    fps: float,
+    include_audio: bool,
+) -> list[str]:
     command = [
         str(ffmpeg),
         "-hide_banner",
@@ -146,12 +177,26 @@ def build_alpha_mov_command(ffmpeg: Path, frame_pattern: Path, input_path: Path,
         str(frame_pattern),
     ]
     if include_audio:
-        command.extend(["-i", str(input_path), "-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-shortest"])
+        command.extend(
+            [
+                "-i",
+                str(input_path),
+                "-map",
+                "0:v",
+                "-map",
+                "1:a?",
+                "-c:a",
+                "copy",
+                "-shortest",
+            ]
+        )
     command.extend(["-c:v", "qtrle", "-pix_fmt", "argb", str(output_path)])
     return command
 
 
-def build_preview_command(ffmpeg: Path, frame_pattern: Path, output_path: Path, fps: float) -> list[str]:
+def build_preview_command(
+    ffmpeg: Path, frame_pattern: Path, output_path: Path, fps: float
+) -> list[str]:
     return [
         str(ffmpeg),
         "-hide_banner",
@@ -199,25 +244,39 @@ def build_raw_alpha_mov_command(
         "pipe:0",
     ]
     if include_audio:
-        command.extend(["-i", str(input_path), "-map", "0:v", "-map", "1:a?", "-c:a", "copy", "-shortest"])
+        command.extend(
+            [
+                "-i",
+                str(input_path),
+                "-map",
+                "0:v",
+                "-map",
+                "1:a?",
+                "-c:a",
+                "copy",
+                "-shortest",
+            ]
+        )
     if duration_seconds is not None:
         command.extend(["-t", f"{duration_seconds:.6f}"])
 
     if codec == "qtrle":
         command.extend(["-c:v", "qtrle", "-pix_fmt", "argb"])
     elif codec == "prores":
-        command.extend([
-            "-c:v",
-            "prores_ks",
-            "-profile:v",
-            "4",
-            "-pix_fmt",
-            "yuva444p10le",
-            "-qscale:v",
-            str(DEFAULT_PRORES_QSCALE),
-            "-alpha_bits",
-            str(DEFAULT_PRORES_ALPHA_BITS),
-        ])
+        command.extend(
+            [
+                "-c:v",
+                "prores_ks",
+                "-profile:v",
+                "4",
+                "-pix_fmt",
+                "yuva444p10le",
+                "-qscale:v",
+                str(DEFAULT_PRORES_QSCALE),
+                "-alpha_bits",
+                str(DEFAULT_PRORES_ALPHA_BITS),
+            ]
+        )
     else:
         raise ValueError(f"Unsupported alpha codec: {codec}")
 
@@ -298,10 +357,17 @@ def process_frames(
             alpha_matting_background_threshold=10,
             alpha_matting_erode_size=10,
         )
-        apply_alpha_tuning(cutout, shrink=shrink, blur=blur).save(frame_dir / f"{count + 1:06d}.png")
+        apply_alpha_tuning(cutout, shrink=shrink, blur=blur).save(
+            frame_dir / f"{count + 1:06d}.png"
+        )
         count += 1
         now = time.perf_counter()
-        if count == 1 or count % 30 == 0 or now - last_progress_at >= 5 or (total_frames and count >= total_frames):
+        if (
+            count == 1
+            or count % 30 == 0
+            or now - last_progress_at >= 5
+            or (total_frames and count >= total_frames)
+        ):
             elapsed = time.perf_counter() - started
             seconds_per_frame = elapsed / count
             if total_frames:
@@ -375,7 +441,9 @@ def process_rvm_video(
     import torch
 
     if not torch.cuda.is_available():
-        raise RuntimeError("RVM backend needs CUDA, but torch.cuda.is_available() is false.")
+        raise RuntimeError(
+            "RVM backend needs CUDA, but torch.cuda.is_available() is false."
+        )
 
     device = torch.device("cuda")
     dtype = torch.float16
@@ -393,7 +461,9 @@ def process_rvm_video(
         raise RuntimeError("Could not read video dimensions.")
 
     scale = min(1.0, max_width / width) if max_width > 0 else 1.0
-    output_width, output_height = (int(width * scale), int(height * scale)) if scale < 1 else (width, height)
+    output_width, output_height = (
+        (int(width * scale), int(height * scale)) if scale < 1 else (width, height)
+    )
     frame_limit = int(round(fps * limit_seconds)) if limit_seconds else None
     total_frames = frame_limit if frame_limit is not None else source_frame_count
     if source_frame_count and total_frames:
@@ -434,12 +504,18 @@ def process_rvm_video(
         with torch.inference_mode():
             while frame_limit is None or count < frame_limit:
                 frames = []
-                while len(frames) < chunk_size and (frame_limit is None or count + len(frames) < frame_limit):
+                while len(frames) < chunk_size and (
+                    frame_limit is None or count + len(frames) < frame_limit
+                ):
                     ok, frame = capture.read()
                     if not ok:
                         break
                     if scale < 1:
-                        frame = cv2.resize(frame, (output_width, output_height), interpolation=cv2.INTER_AREA)
+                        frame = cv2.resize(
+                            frame,
+                            (output_width, output_height),
+                            interpolation=cv2.INTER_AREA,
+                        )
                     frames.append(frame)
 
                 if not frames:
@@ -454,7 +530,12 @@ def process_rvm_video(
 
                 count += len(frames)
                 now = time.perf_counter()
-                if count == len(frames) or count % 30 == 0 or now - last_progress_at >= 5 or (total_frames and count >= total_frames):
+                if (
+                    count == len(frames)
+                    or count % 30 == 0
+                    or now - last_progress_at >= 5
+                    or (total_frames and count >= total_frames)
+                ):
                     elapsed = now - started
                     seconds_per_frame = elapsed / count
                     if total_frames:
@@ -482,21 +563,73 @@ def process_rvm_video(
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Remove the background from a talking-head video and write a transparent MOV.")
+    parser = argparse.ArgumentParser(
+        description="Remove the background from a talking-head video and write a transparent MOV."
+    )
     parser.add_argument("video", type=Path, help="Input video file")
     parser.add_argument("-o", "--output", type=Path, help="Output .mov path")
-    parser.add_argument("--backend", default=DEFAULT_BACKEND, choices=["rvm", "rembg"], help="Matting backend")
-    parser.add_argument("--codec", default=DEFAULT_CODEC, choices=["prores", "qtrle"], help="Alpha MOV codec")
-    parser.add_argument("--model", default=DEFAULT_MODEL, help="Segmentation model: u2net_human_seg, isnet-general-use, birefnet-portrait")
-    parser.add_argument("--max-width", type=int, default=DEFAULT_MAX_WIDTH, help="Scale output to this width before segmentation; defaults to 0/source size")
-    parser.add_argument("--rvm-downsample-ratio", type=float, default=0.125, help="RVM downsample ratio; 0.125 is the recommended 4K setting")
-    parser.add_argument("--rvm-chunk", type=int, default=4, help="RVM frames per inference chunk")
-    parser.add_argument("--shrink", type=int, default=DEFAULT_SHRINK, help="Shrink alpha edge by this many pixels")
-    parser.add_argument("--blur", type=float, default=DEFAULT_BLUR, help="Blur alpha edge by this many pixels")
-    parser.add_argument("--sample-seconds", type=float, help="Only process the first N seconds, useful for tuning")
-    parser.add_argument("--preview", action="store_true", help="Also write a checkerboard MP4 preview")
-    parser.add_argument("--alpha-matting", action="store_true", help="Use rembg alpha matting; slower and can print solver warnings")
-    parser.add_argument("--no-audio", action="store_true", help="Do not copy audio from the source video")
+    parser.add_argument(
+        "--backend",
+        default=DEFAULT_BACKEND,
+        choices=["rvm", "rembg"],
+        help="Matting backend",
+    )
+    parser.add_argument(
+        "--codec",
+        default=DEFAULT_CODEC,
+        choices=["prores", "qtrle"],
+        help="Alpha MOV codec",
+    )
+    parser.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="Segmentation model: u2net_human_seg, isnet-general-use, birefnet-portrait",
+    )
+    parser.add_argument(
+        "--max-width",
+        type=int,
+        default=DEFAULT_MAX_WIDTH,
+        help="Scale output to this width before segmentation; defaults to 0/source size",
+    )
+    parser.add_argument(
+        "--rvm-downsample-ratio",
+        type=float,
+        default=0.125,
+        help="RVM downsample ratio; 0.125 is the recommended 4K setting",
+    )
+    parser.add_argument(
+        "--rvm-chunk", type=int, default=4, help="RVM frames per inference chunk"
+    )
+    parser.add_argument(
+        "--shrink",
+        type=int,
+        default=DEFAULT_SHRINK,
+        help="Shrink alpha edge by this many pixels",
+    )
+    parser.add_argument(
+        "--blur",
+        type=float,
+        default=DEFAULT_BLUR,
+        help="Blur alpha edge by this many pixels",
+    )
+    parser.add_argument(
+        "--sample-seconds",
+        type=float,
+        help="Only process the first N seconds, useful for tuning",
+    )
+    parser.add_argument(
+        "--preview", action="store_true", help="Also write a checkerboard MP4 preview"
+    )
+    parser.add_argument(
+        "--alpha-matting",
+        action="store_true",
+        help="Use rembg alpha matting; slower and can print solver warnings",
+    )
+    parser.add_argument(
+        "--no-audio",
+        action="store_true",
+        help="Do not copy audio from the source video",
+    )
     return parser.parse_args(argv)
 
 
@@ -509,12 +642,18 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Error: file not found: {input_path}", file=sys.stderr)
         return 1
     if input_path.suffix.lower() not in VIDEO_EXTENSIONS:
-        print(f"Error: unsupported video extension: {input_path.suffix}", file=sys.stderr)
+        print(
+            f"Error: unsupported video extension: {input_path.suffix}", file=sys.stderr
+        )
         return 1
 
     try:
         model = normalize_model(args.model)
-        output_path = (args.output.resolve() if args.output else build_default_output_path(input_path, args.max_width))
+        output_path = (
+            args.output.resolve()
+            if args.output
+            else build_default_output_path(input_path, args.max_width)
+        )
         ffmpeg = find_ffmpeg()
 
         if args.backend == "rvm":
@@ -580,7 +719,12 @@ def main(argv: list[str] | None = None) -> int:
                 preview_path = build_preview_output_path(output_path)
                 print("Writing checkerboard preview...")
                 write_checker_preview_frames(frame_dir, preview_dir)
-                subprocess.run(build_preview_command(ffmpeg, preview_dir / "%06d.png", preview_path, fps), check=True)
+                subprocess.run(
+                    build_preview_command(
+                        ffmpeg, preview_dir / "%06d.png", preview_path, fps
+                    ),
+                    check=True,
+                )
                 print(f"Preview: {preview_path}")
 
         print("Done.")

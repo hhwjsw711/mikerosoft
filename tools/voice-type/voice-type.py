@@ -16,6 +16,7 @@ import time
 import math
 import json
 import signal
+import atexit
 import subprocess
 import threading
 import queue
@@ -46,15 +47,15 @@ platform.setup_dll_paths()
 # Logging
 # ---------------------------------------------------------------------------
 
-_LOG_PATH    = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice-type.log")
-_SCRIPT_DIR  = os.path.dirname(os.path.abspath(__file__))
+_LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice-type.log")
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _CONTROL_SOCKET_PATH = os.path.join(_SCRIPT_DIR, "voice-type-control.sock")
 _INSTANCE_LOCK_PATH = os.path.join(_SCRIPT_DIR, "voice-type.instance.lock")
 _HEARTBEAT_PATH = os.path.join(_SCRIPT_DIR, "voice-type.heartbeat")
-_HEARTBEAT_INTERVAL = 0.5       # how often the hotkey loop refreshes the heartbeat
-_HEARTBEAT_STALE_SECONDS = 10   # older than this => the running instance is wedged
-_LOG_MAX_MB  = 1       # rotate when log exceeds this size
-_LOG_KEEP    = 200     # lines to keep after rotation
+_HEARTBEAT_INTERVAL = 0.5  # how often the hotkey loop refreshes the heartbeat
+_HEARTBEAT_STALE_SECONDS = 10  # older than this => the running instance is wedged
+_LOG_MAX_MB = 1  # rotate when log exceeds this size
+_LOG_KEEP = 200  # lines to keep after rotation
 
 
 _instance_lock_file = None
@@ -81,6 +82,7 @@ def _flock_nb(lock_file) -> bool:
     """Try to grab the instance lock without blocking. True on success."""
     if sys.platform == "win32":
         import msvcrt
+
         lock_file.seek(0)
         try:
             msvcrt.locking(lock_file.fileno(), msvcrt.LK_NBLCK, 1)
@@ -88,6 +90,7 @@ def _flock_nb(lock_file) -> bool:
         except OSError:
             return False
     import fcntl
+
     try:
         fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         return True
@@ -186,9 +189,27 @@ def _rotate_log():
     except Exception:
         pass  # never crash on log housekeeping
 
+
 _rotate_log()
-_log_lock   = threading.Lock()
-_log_file   = open(_LOG_PATH, "a", encoding="utf-8", buffering=1)
+_log_lock = threading.Lock()
+_log_file = open(_LOG_PATH, "a", encoding="utf-8", buffering=1)
+
+
+def _cleanup_resources():
+    global _log_file, _instance_lock_file
+    try:
+        if _log_file is not None:
+            _log_file.close()
+    except Exception:
+        pass
+    try:
+        if _instance_lock_file is not None:
+            _instance_lock_file.close()
+    except Exception:
+        pass
+
+
+atexit.register(_cleanup_resources)
 
 
 def log(msg: str):
@@ -222,51 +243,67 @@ from voice_type_control import ControlServer
 # Configuration
 # ---------------------------------------------------------------------------
 
-POLL_INTERVAL    = 0.01   # key-state poll rate (100 Hz)
+POLL_INTERVAL = 0.01  # key-state poll rate (100 Hz)
 MAX_RECORDING_SECONDS = 120  # safety cap: force-stop if the hotkey appears stuck down
-STREAM_CLOSE_TIMEOUT  = 2.0  # give up on a stream stop/close if CoreAudio deadlocks
-STREAM_INTERVAL  = 0.5    # seconds between streaming preview passes
-STREAM_MIN_AUDIO = 0.8    # don't start streaming until this many seconds recorded
-PRECOMP_MIN_AUDIO = 2.5   # only precompute once enough audio has accumulated
-PRECOMP_MIN_DELTA = 0.8   # minimum new audio before launching another pass
-PRECOMP_OVERLAP = 1.2     # seconds of overlap to stitch base+tail safely
-PRECOMP_IDLE_SLEEP = 0.08 # small backoff while waiting for enough new audio
+STREAM_CLOSE_TIMEOUT = 2.0  # give up on a stream stop/close if CoreAudio deadlocks
+STREAM_INTERVAL = 0.5  # seconds between streaming preview passes
+STREAM_MIN_AUDIO = 0.8  # don't start streaming until this many seconds recorded
+PRECOMP_MIN_AUDIO = 2.5  # only precompute once enough audio has accumulated
+PRECOMP_MIN_DELTA = 0.8  # minimum new audio before launching another pass
+PRECOMP_OVERLAP = 1.2  # seconds of overlap to stitch base+tail safely
+PRECOMP_IDLE_SLEEP = 0.08  # small backoff while waiting for enough new audio
 PRECOMP_STOP_WAIT = 0.75  # wait briefly for in-flight pass to finish on key-up
-FORMATTER_TIMEOUT = 6.0   # soft timeout for local text cleanup
+FORMATTER_TIMEOUT = 6.0  # soft timeout for local text cleanup
 
 # Final transcription model (accurate):
-#   CPU → "small.en"        ~0.5–1.5s depending on clip length
-#   GPU → "large-v3-turbo"  ~0.2s on CUDA
-GPU_MODEL    = "large-v3-turbo"
-CPU_MODEL    = "small.en"
+#   CPU → "small" (multilingual)  ~0.5–1.5s depending on clip length
+#   GPU → "large-v3-turbo"        ~0.2s on CUDA
+GPU_MODEL = "large-v3-turbo"
+CPU_MODEL = "small"
 
 # Streaming preview model (speed over accuracy — visual feedback only):
-# tiny.en runs in ~0.1s on CPU so it never meaningfully blocks the final pass.
-STREAM_MODEL = "tiny.en"
+# tiny runs in ~0.2s on CPU so it never meaningfully blocks the final pass.
+STREAM_MODEL = "tiny"
 
-SAMPLE_RATE  = 16000
-CHANNELS     = 1
-DTYPE        = "float32"
-DEVICE       = None       # None = system default mic
+SAMPLE_RATE = 16000
+CHANNELS = 1
+DTYPE = "float32"
+DEVICE = None  # None = system default mic
 COMPUTE_TYPE = "float16"  # float16 on GPU; overridden to int8 on CPU
 
 # Models available in the tray settings menu.
 # Final model: accuracy matters most; stream model: speed matters most.
-FINAL_MODEL_OPTIONS  = ["tiny.en", "base.en", "small.en", "medium.en",
-                        "large-v2", "large-v3", "large-v3-turbo", "parakeet-tdt-0.6b"]
-STREAM_MODEL_OPTIONS = ["tiny.en", "base.en", "small.en"]
+FINAL_MODEL_OPTIONS = [
+    "tiny",
+    "base",
+    "small",
+    "medium",
+    "tiny.en",
+    "base.en",
+    "small.en",
+    "medium.en",
+    "large-v2",
+    "large-v3",
+    "large-v3-turbo",
+    "parakeet-tdt-0.6b",
+]
+STREAM_MODEL_OPTIONS = ["tiny", "base", "small", "tiny.en", "base.en", "small.en"]
 
 MODEL_LABELS = {
-    "tiny.en":          "Whisper: tiny",
-    "base.en":          "Whisper: base",
-    "small.en":         "Whisper: small",
-    "medium.en":        "Whisper: medium",
-    "large-v2":         "Whisper: large-v2",
-    "large-v3":         "Whisper: large-v3",
-    "large-v3-turbo":   "Whisper: large-v3-turbo",
+    "tiny": "Whisper: tiny",
+    "base": "Whisper: base",
+    "small": "Whisper: small",
+    "medium": "Whisper: medium",
+    "tiny.en": "Whisper: tiny (EN only)",
+    "base.en": "Whisper: base (EN only)",
+    "small.en": "Whisper: small (EN only)",
+    "medium.en": "Whisper: medium (EN only)",
+    "large-v2": "Whisper: large-v2",
+    "large-v3": "Whisper: large-v3",
+    "large-v3-turbo": "Whisper: large-v3-turbo",
     "parakeet-tdt-0.6b": "NVIDIA Parakeet: TDT 0.6b",
 }
-OUTPUT_MODE_OPTIONS  = ["final_only", "hybrid", "stabilized", "precompute"]
+OUTPUT_MODE_OPTIONS = ["final_only", "hybrid", "stabilized", "precompute"]
 FORMATTER_MODEL_OPTIONS = list(FORMATTER_MODEL_PRESETS.keys())
 
 # ---------------------------------------------------------------------------
@@ -289,9 +326,9 @@ def _load_settings():
             _settings = {}
     # Defaults are resolved after CUDA detection so the right model is chosen.
     cuda = platform.cuda_available()
-    _settings.setdefault("final_model",  GPU_MODEL if cuda else CPU_MODEL)
+    _settings.setdefault("final_model", GPU_MODEL if cuda else CPU_MODEL)
     _settings.setdefault("stream_model", GPU_MODEL if cuda else STREAM_MODEL)
-    _settings.setdefault("output_mode",  "final_only")
+    _settings.setdefault("output_mode", "final_only")
     _settings.setdefault("formatter_enabled", False)
     _settings.setdefault("formatter_model", DEFAULT_FORMATTER_MODEL)
     _settings.setdefault("formatter_system_prompt", DEFAULT_FORMATTER_SYSTEM_PROMPT)
@@ -300,10 +337,13 @@ def _load_settings():
     # User-editable word/phrase corrections applied after every transcription.
     # Keys are what the model says (case-insensitive), values are what to inject.
     # Example: "Q DA" -> "CUDA", "congress" -> "Convex"
-    _settings.setdefault("corrections", {
-        "Q DA": "CUDA",
-        "Kuda": "CUDA",
-    })
+    _settings.setdefault(
+        "corrections",
+        {
+            "Q DA": "CUDA",
+            "Kuda": "CUDA",
+        },
+    )
     _save_settings()
 
 
@@ -340,13 +380,14 @@ import re
 # Parakeet is very literal and transcribes filler words exactly.
 # Strip the most common English speech disfluencies from Parakeet output.
 _FILLER_RE = re.compile(
-    r'\b(uh+|um+|er+|ah+|hmm+|hm+|mhm|erm)\b[,.]?',
+    r"\b(uh+|um+|er+|ah+|hmm+|hm+|mhm|erm)\b[,.]?",
     re.IGNORECASE,
 )
 
+
 def _clean_parakeet(text: str) -> str:
-    cleaned = _FILLER_RE.sub('', text)
-    return ' '.join(cleaned.split())
+    cleaned = _FILLER_RE.sub("", text)
+    return " ".join(cleaned.split())
 
 
 def _apply_corrections(text: str) -> str:
@@ -357,7 +398,7 @@ def _apply_corrections(text: str) -> str:
     """
     corrections: dict = _settings.get("corrections", {})
     for wrong, right in corrections.items():
-        pattern = re.compile(r'(?<!\w)' + re.escape(wrong) + r'(?!\w)', re.IGNORECASE)
+        pattern = re.compile(r"(?<!\w)" + re.escape(wrong) + r"(?!\w)", re.IGNORECASE)
         text = pattern.sub(right, text)
     return text
 
@@ -366,15 +407,18 @@ class ParakeetSegment:
     def __init__(self, text):
         self.text = text
 
+
 class ParakeetInfo:
     language = "en"
     language_probability = 1.0
+
 
 # Map of short names (used in settings/menu) to HuggingFace repo IDs.
 # csukuangfj is the primary sherpa-onnx developer — most reliable exports.
 PARAKEET_REPOS = {
     "parakeet-tdt-0.6b": "csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
 }
+
 
 class ParakeetWrapper:
     def __init__(self, repo_id: str):
@@ -392,7 +436,7 @@ class ParakeetWrapper:
             num_threads=4,
             sample_rate=SAMPLE_RATE,
             feature_dim=80,
-            model_type="nemo_transducer"
+            model_type="nemo_transducer",
         )
 
     def transcribe(self, audio, **kwargs):
@@ -440,7 +484,9 @@ def get_model():
                         log("Final model ready.")
                         return _model
                     except Exception as e:
-                        log(f"MLX load failed for {name!r}: {e}. Falling back to faster-whisper.")
+                        log(
+                            f"MLX load failed for {name!r}: {e}. Falling back to faster-whisper."
+                        )
 
                 _model = _load_faster_whisper_model(name)
                 log("Final model ready.")
@@ -460,13 +506,13 @@ def _load_stream_model():
     """Load the stream model in the background. Waits for the final model first
     to avoid competing for CPU during initial warm-up."""
     global _stream_model
-    get_model()   # ensure final model finishes first
+    get_model()  # ensure final model finishes first
     with _stream_model_lock:
         if _stream_model is None:
-            cuda   = platform.cuda_available()
-            name   = _settings.get("stream_model", STREAM_MODEL)
+            cuda = platform.cuda_available()
+            name = _settings.get("stream_model", STREAM_MODEL)
             device = "cuda" if cuda else "cpu"
-            ct     = COMPUTE_TYPE if cuda else "int8"
+            ct = COMPUTE_TYPE if cuda else "int8"
             log(f"Loading stream model {name!r} on {device} ({ct})...")
             _stream_model = WhisperModel(name, device=device, compute_type=ct)
             log("Stream model ready.")
@@ -628,28 +674,28 @@ def _maybe_format_final_text(text: str, mode: str) -> str:
 # ---------------------------------------------------------------------------
 
 _TRAY_COLORS = {
-    "idle":       (72,  72,  82),
-    "recording":  (192, 57,  43),
-    "processing": (211, 84,   0),
-    "disabled":   (38,  38,  42),
+    "idle": (72, 72, 82),
+    "recording": (192, 57, 43),
+    "processing": (211, 84, 0),
+    "disabled": (38, 38, 42),
 }
 
 _TRAY_LABELS = {
-    "idle":       "Voice Type — Ready",
-    "recording":  "Voice Type — Recording…",
+    "idle": "Voice Type — Ready",
+    "recording": "Voice Type — Recording…",
     "processing": "Voice Type — Transcribing…",
-    "disabled":   "Voice Type — Disabled",
+    "disabled": "Voice Type — Disabled",
 }
 
 
 def _make_tray_icon(state: str):
     from PIL import Image, ImageDraw
 
-    fg   = _TRAY_COLORS.get(state, _TRAY_COLORS["idle"])
+    fg = _TRAY_COLORS.get(state, _TRAY_COLORS["idle"])
     size = 64
-    img  = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    d    = ImageDraw.Draw(img)
-    cx   = size // 2
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    cx = size // 2
 
     # Coloured background circle
     d.ellipse([1, 1, size - 2, size - 2], fill=(*fg, 255))
@@ -665,9 +711,13 @@ def _make_tray_icon(state: str):
         # Pillow < 8.2 fallback
         d.rectangle([bx0 + radius, by0, bx1 - radius, by1], fill=wh)
         d.rectangle([bx0, by0 + radius, bx1, by1 - radius], fill=wh)
-        for ex, ey in [(bx0, by0), (bx1 - 2*radius, by0),
-                       (bx0, by1 - 2*radius), (bx1 - 2*radius, by1 - 2*radius)]:
-            d.ellipse([ex, ey, ex + 2*radius, ey + 2*radius], fill=wh)
+        for ex, ey in [
+            (bx0, by0),
+            (bx1 - 2 * radius, by0),
+            (bx0, by1 - 2 * radius),
+            (bx1 - 2 * radius, by1 - 2 * radius),
+        ]:
+            d.ellipse([ex, ey, ex + 2 * radius, ey + 2 * radius], fill=wh)
 
     # Stand arc
     d.arc([cx - 15, by1 - 3, cx + 15, by1 + 13], start=0, end=180, fill=wh, width=3)
@@ -683,11 +733,12 @@ def _make_tray_icon(state: str):
 # System tray icon (pystray — runs in its own background thread)
 # ---------------------------------------------------------------------------
 
+
 class TrayIcon:
     def __init__(self, overlay: "Overlay"):
         self._overlay = overlay
-        self.enabled  = True         # read/written by hotkey thread & tray thread
-        self._icon    = None
+        self.enabled = True  # read/written by hotkey thread & tray thread
+        self._icon = None
 
     def start(self):
         import pystray
@@ -727,10 +778,10 @@ class TrayIcon:
             ]
 
         _OUTPUT_MODE_LABELS = {
-            "final_only":  "Final Only (quality)",
-            "hybrid":      "Hybrid (live overlay)",
-            "stabilized":  "Stabilized (faster output)",
-            "precompute":  "Precompute (faster finalize)",
+            "final_only": "Final Only (quality)",
+            "hybrid": "Hybrid (live overlay)",
+            "stabilized": "Stabilized (faster output)",
+            "precompute": "Precompute (faster finalize)",
         }
 
         def _make_output_mode_action(name):
@@ -770,9 +821,17 @@ class TrayIcon:
         def _formatter_section_items():
             items = []
             if _settings.get("formatter_enabled", False):
-                items.append(pystray.MenuItem("Model", pystray.Menu(lambda: _formatter_model_items())))
-            items.append(pystray.MenuItem("Edit System Prompt...", self._edit_formatter_prompt))
-            items.append(pystray.MenuItem("Reset System Prompt", self._reset_formatter_prompt))
+                items.append(
+                    pystray.MenuItem(
+                        "Model", pystray.Menu(lambda: _formatter_model_items())
+                    )
+                )
+            items.append(
+                pystray.MenuItem("Edit System Prompt...", self._edit_formatter_prompt)
+            )
+            items.append(
+                pystray.MenuItem("Reset System Prompt", self._reset_formatter_prompt)
+            )
             return items
 
         def _menu_items():
@@ -786,8 +845,12 @@ class TrayIcon:
                 ),
                 pystray.MenuItem(
                     "Formatter Enabled",
-                    lambda: _set_formatter_enabled(not _settings.get("formatter_enabled", False)),
-                    checked=lambda item: bool(_settings.get("formatter_enabled", False)),
+                    lambda: _set_formatter_enabled(
+                        not _settings.get("formatter_enabled", False)
+                    ),
+                    checked=lambda item: bool(
+                        _settings.get("formatter_enabled", False)
+                    ),
                 ),
                 pystray.MenuItem("Open Log", self._open_log),
                 pystray.MenuItem(
@@ -796,22 +859,35 @@ class TrayIcon:
                     checked=lambda item: platform.startup_enabled(_VBS_PATH),
                 ),
                 pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Final Model", pystray.Menu(lambda: _final_model_items())),
-                pystray.MenuItem("Preview Model", pystray.Menu(lambda: _stream_model_items())),
-                pystray.MenuItem("Output Mode", pystray.Menu(lambda: _output_mode_items())),
+                pystray.MenuItem(
+                    "Final Model", pystray.Menu(lambda: _final_model_items())
+                ),
+                pystray.MenuItem(
+                    "Preview Model", pystray.Menu(lambda: _stream_model_items())
+                ),
+                pystray.MenuItem(
+                    "Output Mode", pystray.Menu(lambda: _output_mode_items())
+                ),
             ]
             if _settings.get("formatter_enabled", False):
-                items.append(pystray.MenuItem("Formatter", pystray.Menu(lambda: _formatter_section_items())))
-            items.extend([
-                pystray.Menu.SEPARATOR,
-                pystray.MenuItem("Exit", self._on_exit),
-            ])
+                items.append(
+                    pystray.MenuItem(
+                        "Formatter", pystray.Menu(lambda: _formatter_section_items())
+                    )
+                )
+            items.extend(
+                [
+                    pystray.Menu.SEPARATOR,
+                    pystray.MenuItem("Exit", self._on_exit),
+                ]
+            )
             return items
 
         menu = pystray.Menu(lambda: _menu_items())
         icon_kwargs = {}
         if sys.platform == "darwin":
             from AppKit import NSApp  # type: ignore[import]
+
             icon_kwargs["darwin_nsapplication"] = NSApp
 
         self._icon = pystray.Icon(
@@ -839,7 +915,7 @@ class TrayIcon:
         if self._icon is None:
             return
         effective = "disabled" if not self.enabled else state
-        self._icon.icon  = _make_tray_icon(effective)
+        self._icon.icon = _make_tray_icon(effective)
         self._icon.title = _TRAY_LABELS.get(effective, "Voice Type")
 
     # ---- Menu callbacks (called on pystray's thread) ----
@@ -858,7 +934,9 @@ class TrayIcon:
     def _edit_formatter_prompt(self, icon=None, item=None):
         self._overlay.edit_text(
             title="Edit Formatter System Prompt",
-            initial_text=resolve_system_prompt(_settings.get("formatter_system_prompt")),
+            initial_text=resolve_system_prompt(
+                _settings.get("formatter_system_prompt")
+            ),
             on_save=_set_formatter_system_prompt,
             reset_text=DEFAULT_FORMATTER_SYSTEM_PROMPT,
         )
@@ -869,7 +947,7 @@ class TrayIcon:
     def _on_exit(self, icon, item):
         log("Exit requested via tray.")
         icon.stop()
-        self._overlay.quit()   # ask tkinter main loop to exit cleanly
+        self._overlay.quit()  # ask tkinter main loop to exit cleanly
 
 
 class MacTrayIcon:
@@ -928,8 +1006,14 @@ def _apply_settings_changes(*, tray, updates: dict) -> None:
     _set_final_model(str(updates.get("final_model", _settings.get("final_model"))))
     _set_stream_model(str(updates.get("stream_model", _settings.get("stream_model"))))
     _set_output_mode(str(updates.get("output_mode", _settings.get("output_mode"))))
-    _set_formatter_enabled(bool(updates.get("formatter_enabled", _settings.get("formatter_enabled", False))))
-    _set_formatter_model(str(updates.get("formatter_model", _settings.get("formatter_model"))))
+    _set_formatter_enabled(
+        bool(
+            updates.get("formatter_enabled", _settings.get("formatter_enabled", False))
+        )
+    )
+    _set_formatter_model(
+        str(updates.get("formatter_model", _settings.get("formatter_model")))
+    )
 
 
 def _restart_app() -> None:
@@ -940,15 +1024,19 @@ def _restart_app() -> None:
     if sys.platform == "win32":
         script = os.path.join(_SCRIPT_DIR, "restart.bat")
         subprocess.Popen(
-            ["cmd", "/c", script], cwd=_SCRIPT_DIR,
+            ["cmd", "/c", script],
+            cwd=_SCRIPT_DIR,
             creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
             | getattr(subprocess, "DETACHED_PROCESS", 0),
         )
     else:
         script = os.path.join(_SCRIPT_DIR, "voice-type-mac.sh")
         subprocess.Popen(
-            ["bash", script], cwd=_SCRIPT_DIR, start_new_session=True,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            ["bash", script],
+            cwd=_SCRIPT_DIR,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
 
@@ -1043,20 +1131,21 @@ def _make_control_server(tray, overlay: "Overlay") -> ControlServer:
 # ---------------------------------------------------------------------------
 
 # Colours
-_OVL_BG      = "#1C1C1E"   # dark charcoal background
-_COL_REC     = "#FF453A"   # iOS-style red
-_COL_PROC    = "#FF9F0A"   # iOS-style amber
-_COL_TEXT    = "#EBEBF5"   # near-white
-_COL_PREVIEW = "#8E8E93"   # grey for partial text
+_OVL_BG = "#1C1C1E"  # dark charcoal background
+_COL_REC = "#FF453A"  # iOS-style red
+_COL_PROC = "#FF9F0A"  # iOS-style amber
+_COL_TEXT = "#EBEBF5"  # near-white
+_COL_PREVIEW = "#8E8E93"  # grey for partial text
 
 # Waveform bar geometry
-_N_BARS    = 7
-_BAR_W     = 4
-_BAR_GAP   = 3
-_CANVAS_W  = _N_BARS * _BAR_W + (_N_BARS - 1) * _BAR_GAP  # 46 px
-_CANVAS_H  = 28
+_N_BARS = 7
+_BAR_W = 4
+_BAR_GAP = 3
+_CANVAS_W = _N_BARS * _BAR_W + (_N_BARS - 1) * _BAR_GAP  # 46 px
+_CANVAS_H = 28
 _BAR_MAX_H = 20
 _BAR_MIN_H = 3
+
 
 def _wrap_preview(text: str) -> str:
     return wrap_preview(text)
@@ -1069,15 +1158,17 @@ class Overlay:
         Used to drive the waveform animation while recording.
         """
         self._get_level = get_level
-        self._state     = "hidden"   # "hidden" | "rec" | "processing"
-        self._bar_h     = [float(_BAR_MIN_H)] * _N_BARS
-        self._monitor   = None       # cached work-area tuple for reposition
-        self._on_click  = None
+        self._state = "hidden"  # "hidden" | "rec" | "processing"
+        self._bar_h = [float(_BAR_MIN_H)] * _N_BARS
+        self._monitor = None  # cached work-area tuple for reposition
+        self._on_click = None
 
         self._root = tk.Tk()
         self._root.withdraw()
         self._is_native_surface = sys.platform == "darwin"
-        self._native_surface = AppKitOverlaySurface() if self._is_native_surface else None
+        self._native_surface = (
+            AppKitOverlaySurface() if self._is_native_surface else None
+        )
         self._bar_ids = []
 
         if not self._is_native_surface:
@@ -1095,16 +1186,27 @@ class Overlay:
             top = tk.Frame(body, bg=_OVL_BG)
             top.pack(fill="x")
 
-            self._dot = tk.Label(top, text="●", fg=_COL_REC, bg=_OVL_BG,
-                                 font=("Segoe UI", 8))
+            self._dot = tk.Label(
+                top, text="●", fg=_COL_REC, bg=_OVL_BG, font=("Segoe UI", 8)
+            )
             self._dot.pack(side="left")
 
-            self._label = tk.Label(top, text=" REC", fg=_COL_TEXT, bg=_OVL_BG,
-                                   font=("Segoe UI", 10, "bold"))
+            self._label = tk.Label(
+                top,
+                text=" REC",
+                fg=_COL_TEXT,
+                bg=_OVL_BG,
+                font=("Segoe UI", 10, "bold"),
+            )
             self._label.pack(side="left")
 
-            self._canvas = tk.Canvas(top, width=_CANVAS_W + 4, height=_CANVAS_H,
-                                     bg=_OVL_BG, highlightthickness=0)
+            self._canvas = tk.Canvas(
+                top,
+                width=_CANVAS_W + 4,
+                height=_CANVAS_H,
+                bg=_OVL_BG,
+                highlightthickness=0,
+            )
             self._canvas.pack(side="left", padx=(12, 0))
 
             for i in range(_N_BARS):
@@ -1112,19 +1214,33 @@ class Overlay:
                 x1 = x0 + _BAR_W
                 y1 = _CANVAS_H - 2
                 y0 = y1 - _BAR_MIN_H
-                rid = self._canvas.create_rectangle(x0, y0, x1, y1,
-                                                    fill=_COL_REC, outline="")
+                rid = self._canvas.create_rectangle(
+                    x0, y0, x1, y1, fill=_COL_REC, outline=""
+                )
                 self._bar_ids.append(rid)
 
-            self._preview = tk.Label(body, text="", fg=_COL_PREVIEW, bg=_OVL_BG,
-                                     font=("Segoe UI", 12), anchor="w",
-                                     justify="left", wraplength=360,
-                                     pady=2)
+            self._preview = tk.Label(
+                body,
+                text="",
+                fg=_COL_PREVIEW,
+                bg=_OVL_BG,
+                font=("Segoe UI", 12),
+                anchor="w",
+                justify="left",
+                wraplength=360,
+                pady=2,
+            )
 
             platform.apply_overlay_no_activate(self._root)
             for widget in (
-                self._root, self._accent, body, top, self._dot, self._label,
-                self._canvas, self._preview,
+                self._root,
+                self._accent,
+                body,
+                top,
+                self._dot,
+                self._label,
+                self._canvas,
+                self._preview,
             ):
                 widget.bind("<Button-1>", self._handle_click, add="+")
         else:
@@ -1134,14 +1250,14 @@ class Overlay:
             self._canvas = None
             self._preview = None
 
-        self._visible   = False
+        self._visible = False
         self._editor_win = None
         self._settings_win = None
         self._dialog_requested = False
         self._pending_settings_payload = None
         self._cmd_queue: queue.Queue = queue.Queue()
-        self._root.after(50,  self._poll)
-        self._root.after(33,  self._animate)   # 30 fps animation loop
+        self._root.after(50, self._poll)
+        self._root.after(33, self._animate)  # 30 fps animation loop
 
     # ── Thread-safe public commands ──────────────────────────────────────
 
@@ -1154,31 +1270,43 @@ class Overlay:
     def hide(self):
         self._cmd_queue.put(("hide", ""))
 
-    def edit_text(self, title: str, initial_text: str, on_save, reset_text: str | None = None):
+    def edit_text(
+        self, title: str, initial_text: str, on_save, reset_text: str | None = None
+    ):
         self._dialog_requested = True
-        self._cmd_queue.put((
-            "edit_text",
-            {
-                "title": title,
-                "initial_text": initial_text,
-                "on_save": on_save,
-                "reset_text": reset_text,
-            },
-        ))
+        self._cmd_queue.put(
+            (
+                "edit_text",
+                {
+                    "title": title,
+                    "initial_text": initial_text,
+                    "on_save": on_save,
+                    "reset_text": reset_text,
+                },
+            )
+        )
 
-    def edit_settings(self, state: dict, on_save, on_open_log, on_restart=None,
-                      defer_until_hidden: bool = False):
+    def edit_settings(
+        self,
+        state: dict,
+        on_save,
+        on_open_log,
+        on_restart=None,
+        defer_until_hidden: bool = False,
+    ):
         self._dialog_requested = True
-        self._cmd_queue.put((
-            "edit_settings",
-            {
-                "state": state,
-                "on_save": on_save,
-                "on_open_log": on_open_log,
-                "on_restart": on_restart,
-                "defer_until_hidden": defer_until_hidden,
-            },
-        ))
+        self._cmd_queue.put(
+            (
+                "edit_settings",
+                {
+                    "state": state,
+                    "on_save": on_save,
+                    "on_open_log": on_open_log,
+                    "on_restart": on_restart,
+                    "defer_until_hidden": defer_until_hidden,
+                },
+            )
+        )
 
     def set_click_action(self, on_click) -> None:
         self._on_click = on_click
@@ -1208,11 +1336,14 @@ class Overlay:
                     else:
                         self._root.withdraw()
                     self._visible = False
-                    self._state   = "hidden"
+                    self._state = "hidden"
                     if self._pending_settings_payload is not None:
                         payload = self._pending_settings_payload
                         self._pending_settings_payload = None
-                        self._root.after(10, lambda payload=payload: self._open_settings_editor(payload))
+                        self._root.after(
+                            10,
+                            lambda payload=payload: self._open_settings_editor(payload),
+                        )
                 elif cmd == "edit_text":
                     self._open_text_editor(preview)
                 elif cmd == "edit_settings":
@@ -1225,8 +1356,8 @@ class Overlay:
                     if self._is_native_surface:
                         self._native_surface.set_state(cmd, preview)
                     else:
-                        col   = _COL_REC  if cmd == "rec" else _COL_PROC
-                        label = " REC"    if cmd == "rec" else " ..."
+                        col = _COL_REC if cmd == "rec" else _COL_PROC
+                        label = " REC" if cmd == "rec" else " ..."
                         self._accent.configure(bg=col)
                         self._dot.configure(fg=col)
                         self._label.configure(text=label)
@@ -1281,12 +1412,12 @@ class Overlay:
         if self._visible and self._state != "hidden":
             t = time.perf_counter()
             if self._state == "rec":
-                raw   = self._get_level()
-                level = min(raw * 14.0, 1.0)   # typical mic RMS is 0.01–0.07
+                raw = self._get_level()
+                level = min(raw * 14.0, 1.0)  # typical mic RMS is 0.01–0.07
                 for i in range(_N_BARS):
                     phase = i * 0.75
-                    freq  = 4.5 + i * 0.4
-                    wave  = (math.sin(t * freq + phase) + 1) / 2
+                    freq = 4.5 + i * 0.4
+                    wave = (math.sin(t * freq + phase) + 1) / 2
                     # Quiet idle: gentle low ripple; loud: bars jump high
                     target = _BAR_MIN_H + (_BAR_MAX_H - _BAR_MIN_H) * (
                         level * 0.75 + wave * (0.25 + level * 0.15)
@@ -1295,7 +1426,7 @@ class Overlay:
             else:
                 # Processing: smooth travelling sine sweep
                 for i in range(_N_BARS):
-                    wave   = (math.sin(t * 3.5 + i * 0.75) + 1) / 2
+                    wave = (math.sin(t * 3.5 + i * 0.75) + 1) / 2
                     target = _BAR_MIN_H + (_BAR_MAX_H - _BAR_MIN_H) * wave * 0.55
                     self._bar_h[i] = self._bar_h[i] * 0.6 + target * 0.4
 
@@ -1381,9 +1512,13 @@ class Overlay:
             editor.insert("1.0", reset_text)
 
         tk.Button(buttons, text="Save", command=_save, width=10).pack(side="right")
-        tk.Button(buttons, text="Cancel", command=_close, width=10).pack(side="right", padx=(0, 8))
+        tk.Button(buttons, text="Cancel", command=_close, width=10).pack(
+            side="right", padx=(0, 8)
+        )
         if reset_text is not None:
-            tk.Button(buttons, text="Reset Default", command=_reset, width=14).pack(side="left")
+            tk.Button(buttons, text="Reset Default", command=_reset, width=14).pack(
+                side="left"
+            )
 
         win.protocol("WM_DELETE_WINDOW", _close)
 
@@ -1405,9 +1540,15 @@ class Overlay:
             label_to_value = {label: value for value, label in value_to_label.items()}
             return value_to_label, label_to_value
 
-        final_v2l, final_l2v = _choice_maps(state["final_model_options"], state["model_labels"])
-        stream_v2l, stream_l2v = _choice_maps(state["stream_model_options"], state["model_labels"])
-        output_v2l, output_l2v = _choice_maps(state["output_mode_options"], state["output_mode_labels"])
+        final_v2l, final_l2v = _choice_maps(
+            state["final_model_options"], state["model_labels"]
+        )
+        stream_v2l, stream_l2v = _choice_maps(
+            state["stream_model_options"], state["model_labels"]
+        )
+        output_v2l, output_l2v = _choice_maps(
+            state["output_mode_options"], state["output_mode_labels"]
+        )
         formatter_v2l, formatter_l2v = _choice_maps(
             state["formatter_model_options"], state["formatter_model_labels"]
         )
@@ -1459,7 +1600,9 @@ class Overlay:
         final_combo.grid(row=row, column=1, sticky="ew", pady=4)
         row += 1
 
-        ttk.Label(body, text="Preview Model").grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Label(body, text="Preview Model").grid(
+            row=row, column=0, sticky="w", pady=4
+        )
         stream_combo = ttk.Combobox(
             body,
             textvariable=stream_var,
@@ -1479,12 +1622,14 @@ class Overlay:
         output_combo.grid(row=row, column=1, sticky="ew", pady=4)
         row += 1
 
-        ttk.Checkbutton(body, text="Formatter Enabled", variable=formatter_enabled_var).grid(
-            row=row, column=0, columnspan=2, sticky="w", pady=(10, 4)
-        )
+        ttk.Checkbutton(
+            body, text="Formatter Enabled", variable=formatter_enabled_var
+        ).grid(row=row, column=0, columnspan=2, sticky="w", pady=(10, 4))
         row += 1
 
-        ttk.Label(body, text="Formatter Model").grid(row=row, column=0, sticky="w", pady=4)
+        ttk.Label(body, text="Formatter Model").grid(
+            row=row, column=0, sticky="w", pady=4
+        )
         formatter_combo = ttk.Combobox(
             body,
             textvariable=formatter_var,
@@ -1535,6 +1680,7 @@ class Overlay:
         ttk.Button(left_buttons, text="Open Log", command=on_open_log).pack(side="left")
 
         if on_restart is not None:
+
             def _restart():
                 if not messagebox.askyesno(
                     "voice-type",
@@ -1556,8 +1702,12 @@ class Overlay:
                 side="left", padx=(8, 0)
             )
 
-        ttk.Button(buttons, text="Cancel", command=_close).grid(row=0, column=1, sticky="e", padx=(0, 8))
-        ttk.Button(buttons, text="Save", command=_save).grid(row=0, column=2, sticky="e")
+        ttk.Button(buttons, text="Cancel", command=_close).grid(
+            row=0, column=1, sticky="e", padx=(0, 8)
+        )
+        ttk.Button(buttons, text="Save", command=_save).grid(
+            row=0, column=2, sticky="e"
+        )
 
         win.protocol("WM_DELETE_WINDOW", _close)
         win.focus_force()
@@ -1567,9 +1717,12 @@ class Overlay:
         try:
             self._monitor = platform.get_foreground_monitor_work_area()
         except Exception:
-            self._monitor = (0, 0,
-                             self._root.winfo_screenwidth(),
-                             self._root.winfo_screenheight())
+            self._monitor = (
+                0,
+                0,
+                self._root.winfo_screenwidth(),
+                self._root.winfo_screenheight(),
+            )
         self._do_geometry()
 
     def _reposition(self):
@@ -1596,6 +1749,7 @@ class Overlay:
 # Audio recorder
 # ---------------------------------------------------------------------------
 
+
 class Recorder:
     """Owns the microphone stream and captures audio while recording.
 
@@ -1607,7 +1761,9 @@ class Recorder:
         self._frames: list[np.ndarray] = []
         self._lock = threading.Lock()
         self._recording = False
-        self._stream_error = False  # set on any callback status; triggers restart on next key press
+        self._stream_error = (
+            False  # set on any callback status; triggers restart on next key press
+        )
         self._keep_stream_open = should_keep_mic_stream_open_local()
         self._stream: sd.InputStream | None = None
         if self._keep_stream_open:
@@ -1619,8 +1775,12 @@ class Recorder:
         # blocksize=256 → 16 ms per callback — low enough that the first
         # captured block is ≤16 ms after the key goes down.
         self._stream = sd.InputStream(
-            samplerate=SAMPLE_RATE, channels=CHANNELS, dtype=DTYPE,
-            device=DEVICE, callback=self._callback, blocksize=256,
+            samplerate=SAMPLE_RATE,
+            channels=CHANNELS,
+            dtype=DTYPE,
+            device=DEVICE,
+            callback=self._callback,
+            blocksize=256,
         )
         self._stream.start()
 
@@ -1642,13 +1802,16 @@ class Recorder:
             except Exception as e:
                 log(f"Stream close error (ignored): {e}")
 
-        t = threading.Thread(target=_do_close, daemon=True,
-                             name="voice-type-stream-close")
+        t = threading.Thread(
+            target=_do_close, daemon=True, name="voice-type-stream-close"
+        )
         t.start()
         t.join(timeout=STREAM_CLOSE_TIMEOUT)
         if t.is_alive():
-            log(f"Stream close timed out after {STREAM_CLOSE_TIMEOUT}s "
-                "(CoreAudio deadlock?); abandoning stream, will reopen on next use.")
+            log(
+                f"Stream close timed out after {STREAM_CLOSE_TIMEOUT}s "
+                "(CoreAudio deadlock?); abandoning stream, will reopen on next use."
+            )
 
     def _ensure_stream(self):
         """Restart the audio stream if it's dead or errored.
@@ -1678,7 +1841,7 @@ class Recorder:
     def start(self):
         self._ensure_stream()
         with self._lock:
-            self._frames    = []
+            self._frames = []
             self._recording = True
 
     def peek(self) -> np.ndarray:
@@ -1696,7 +1859,7 @@ class Recorder:
             recent = np.concatenate(self._frames[-2:], axis=0).flatten()
             if len(recent) == 0:
                 return 0.0
-            return float(np.sqrt(np.mean(recent ** 2)))
+            return float(np.sqrt(np.mean(recent**2)))
 
     def stop(self) -> np.ndarray:
         with self._lock:
@@ -1713,7 +1876,7 @@ class Recorder:
             return audio
 
         dur = len(audio) / SAMPLE_RATE
-        rms = float(np.sqrt(np.mean(audio ** 2)))
+        rms = float(np.sqrt(np.mean(audio**2)))
         peak = float(np.max(np.abs(audio)))
         log(f"Stopped: {dur:.2f}s  rms={rms:.4f}  peak={peak:.4f}")
         return audio
@@ -1721,7 +1884,7 @@ class Recorder:
     def _callback(self, indata, frames, time_info, status):
         if status:
             log(f"Audio status: {status}")
-            self._stream_error = True   # flag for restart on next key press
+            self._stream_error = True  # flag for restart on next key press
         if self._recording:
             self._frames.append(indata.copy())
 
@@ -1729,6 +1892,7 @@ class Recorder:
 # ---------------------------------------------------------------------------
 # Transcription
 # ---------------------------------------------------------------------------
+
 
 def transcribe(audio: np.ndarray, verbose: bool = True, on_segment=None) -> str:
     """Transcribe audio using the final model.
@@ -1740,10 +1904,9 @@ def transcribe(audio: np.ndarray, verbose: bool = True, on_segment=None) -> str:
     duration = len(audio) / SAMPLE_RATE
     if duration < 0.3:
         return ""
-    model    = get_model()
+    model = get_model()
     segments, info = model.transcribe(
         audio,
-        language="en",
         vad_filter=False,
         beam_size=1,
         condition_on_previous_text=False,
@@ -1757,8 +1920,10 @@ def transcribe(audio: np.ndarray, verbose: bool = True, on_segment=None) -> str:
                 on_segment(text)
     result = _apply_corrections(" ".join(parts).strip())
     if verbose:
-        log(f"Transcribed {duration:.1f}s → {result!r}  "
-            f"(lang={info.language} p={info.language_probability:.2f})")
+        log(
+            f"Transcribed {duration:.1f}s → {result!r}  "
+            f"(lang={info.language} p={info.language_probability:.2f})"
+        )
     return result
 
 
@@ -1766,11 +1931,12 @@ def transcribe(audio: np.ndarray, verbose: bool = True, on_segment=None) -> str:
 # Streaming transcriber — runs while key is held
 # ---------------------------------------------------------------------------
 
+
 class StreamingTranscriber:
     def __init__(self, recorder: Recorder, overlay: Overlay):
         self._recorder = recorder
-        self._overlay  = overlay
-        self._active   = False
+        self._overlay = overlay
+        self._active = False
         self._last_text = ""
 
     def start(self):
@@ -1778,7 +1944,7 @@ class StreamingTranscriber:
             # Already streaming — a second _loop thread would double every
             # log line and waste CPU re-transcribing the same buffer.
             return
-        self._active    = True
+        self._active = True
         self._last_text = ""
         threading.Thread(target=self._loop, daemon=True).start()
 
@@ -1806,14 +1972,18 @@ class StreamingTranscriber:
                 t0 = time.perf_counter()
                 # Use the dedicated stream model — never contends with _model_lock
                 segs, _ = model.transcribe(
-                    audio, language="en", vad_filter=False,
-                    beam_size=1, condition_on_previous_text=False,
+                    audio,
+                    vad_filter=False,
+                    beam_size=1,
+                    condition_on_previous_text=False,
                 )
                 text = " ".join(s.text.strip() for s in segs).strip()
                 if not self._active:
                     break
                 elapsed = time.perf_counter() - t0
-                log(f"Stream pass: {len(audio)/SAMPLE_RATE:.1f}s → {elapsed:.2f}s → {text[:60]!r}")
+                log(
+                    f"Stream pass: {len(audio) / SAMPLE_RATE:.1f}s → {elapsed:.2f}s → {text[:60]!r}"
+                )
                 self._last_text = text
                 self._overlay.show_rec(_wrap_preview(text))
             time.sleep(STREAM_INTERVAL)
@@ -1822,6 +1992,7 @@ class StreamingTranscriber:
 # ---------------------------------------------------------------------------
 # Final-model precompute worker — runs while key is held (precompute mode)
 # ---------------------------------------------------------------------------
+
 
 class FinalPrecomputer:
     """Periodically runs the final model on a growing audio snapshot while the
@@ -1907,6 +2078,7 @@ class FinalPrecomputer:
 # Text injection
 # ---------------------------------------------------------------------------
 
+
 def paste_text(text: str):
     if not text.strip():
         return
@@ -1920,6 +2092,7 @@ def paste_text(text: str):
 # ---------------------------------------------------------------------------
 # Finalize helpers (one per output mode)
 # ---------------------------------------------------------------------------
+
 
 def _merge_text(base: str, tail: str) -> str:
     """Merge base + tail transcripts with a simple overlap heuristic."""
@@ -1946,8 +2119,9 @@ def _merge_text(base: str, tail: str) -> str:
     return f"{base} {tail}".strip()
 
 
-def _finish_one_shot(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
-                     t0: float, mode: str):
+def _finish_one_shot(
+    audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon", t0: float, mode: str
+):
     """final_only and hybrid: wait for full transcription then inject once.
 
     hybrid differs from final_only only in that it updates the overlay text
@@ -1955,6 +2129,7 @@ def _finish_one_shot(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
     """
     on_seg = None
     if mode == "hybrid":
+
         def on_seg(text: str):
             overlay.show_processing(_wrap_preview(text))
 
@@ -1975,8 +2150,14 @@ def _finish_one_shot(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
         log(f"Nothing to paste ({elapsed:.2f}s) [{mode}].")
 
 
-def _finish_precompute(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
-                       t0: float, base_text: str, base_samples: int):
+def _finish_precompute(
+    audio: np.ndarray,
+    overlay: "Overlay",
+    tray: "TrayIcon",
+    t0: float,
+    base_text: str,
+    base_samples: int,
+):
     """Precompute mode: reuse best in-recording snapshot, then transcribe tail."""
     overlap_samples = int(PRECOMP_OVERLAP * SAMPLE_RATE)
     total_samples = len(audio)
@@ -1989,8 +2170,10 @@ def _finish_precompute(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
         if use_base:
             tail_start = max(0, base_samples - overlap_samples)
             tail_audio = audio[tail_start:]
-            log(f"[precompute] base={base_samples / SAMPLE_RATE:.1f}s "
-                f"tail={len(tail_audio) / SAMPLE_RATE:.1f}s")
+            log(
+                f"[precompute] base={base_samples / SAMPLE_RATE:.1f}s "
+                f"tail={len(tail_audio) / SAMPLE_RATE:.1f}s"
+            )
             tail_text = transcribe(tail_audio)
             text = _merge_text(base_text, tail_text)
         else:
@@ -2015,8 +2198,9 @@ def _finish_precompute(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
         log(f"Nothing to paste ({elapsed:.2f}s) [precompute].")
 
 
-def _finish_stabilized(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
-                       t0: float):
+def _finish_stabilized(
+    audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon", t0: float
+):
     """Stabilized: inject segments as decoded, then run bounded tail correction."""
     title = platform.get_foreground_window_title()
     log(f"[stabilized] target: {title!r}")
@@ -2027,7 +2211,7 @@ def _finish_stabilized(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
     def _commit(text: str):
         prefix = " " if injected_parts else ""
         if not injected_parts:
-            time.sleep(0.05)   # brief settle before first keystroke
+            time.sleep(0.05)  # brief settle before first keystroke
             first_char_t[0] = time.perf_counter()
         platform.inject_text(prefix + text, log)
         injected_parts.append(text)
@@ -2064,7 +2248,7 @@ def _finish_stabilized(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
             else:
                 break
         to_delete = len(injected_text) - common
-        tail      = full_text[common:]
+        tail = full_text[common:]
         log(f"[stabilized] delete {to_delete} chars, append {tail!r}")
         if to_delete > 0:
             platform.inject_backspaces(to_delete, log)
@@ -2076,7 +2260,9 @@ def _finish_stabilized(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
     overlay.hide()
     tray.set_state("idle")
     if first_char_t[0] is not None:
-        log(f"[stabilized] first char +{first_char_t[0] - t0:.2f}s, total {elapsed:.2f}s")
+        log(
+            f"[stabilized] first char +{first_char_t[0] - t0:.2f}s, total {elapsed:.2f}s"
+        )
     if full_text:
         log(f"Done ({elapsed:.2f}s) [stabilized]: {full_text!r}")
     else:
@@ -2086,6 +2272,7 @@ def _finish_stabilized(audio: np.ndarray, overlay: "Overlay", tray: "TrayIcon",
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def run():
     # Keep the heartbeat fresh across the (potentially slow) import + startup
@@ -2102,11 +2289,11 @@ def run():
     )
 
     recorder = Recorder()
-    overlay  = Overlay(get_level=recorder.get_rms)
+    overlay = Overlay(get_level=recorder.get_rms)
     streamer = StreamingTranscriber(recorder, overlay)
     precomputer = FinalPrecomputer(recorder)
     tray_class = MacTrayIcon if sys.platform == "darwin" else TrayIcon
-    tray     = tray_class(overlay)
+    tray = tray_class(overlay)
     control_server = None
     if sys.platform == "darwin":
         control_server = _make_control_server(tray, overlay)
@@ -2122,6 +2309,7 @@ def run():
         threading.Thread(target=get_model, daemon=True).start()
         threading.Thread(target=_load_stream_model, daemon=True).start()
         if _settings.get("formatter_enabled", False):
+
             def _warm_formatter_after_startup():
                 get_model()
                 _load_stream_model()
@@ -2129,6 +2317,7 @@ def run():
 
             threading.Thread(target=_warm_formatter_after_startup, daemon=True).start()
         import sys as _sys
+
         _hotkey_label = "F12" if _sys.platform == "darwin" else "Right Ctrl"
         log(f"Ready. Hold {_hotkey_label} to record.")
 
@@ -2153,8 +2342,14 @@ def run():
                 forced_stop = False
             is_down = raw_down and not forced_stop
 
-            if is_down and was_down and time.monotonic() - down_since > MAX_RECORDING_SECONDS:
-                log(f"--- Recording exceeded {MAX_RECORDING_SECONDS}s safety cap; force-stopping ---")
+            if (
+                is_down
+                and was_down
+                and time.monotonic() - down_since > MAX_RECORDING_SECONDS
+            ):
+                log(
+                    f"--- Recording exceeded {MAX_RECORDING_SECONDS}s safety cap; force-stopping ---"
+                )
                 forced_stop = True
                 is_down = False
 
@@ -2181,7 +2376,7 @@ def run():
                     # Stop the streaming preview loop FIRST: if recorder.stop()
                     # deadlocks inside CoreAudio, the streamer is already
                     # halted so the overlay/CPU don't spin forever.
-                    streamer.stop()   # signal stream loop; final pass always runs below
+                    streamer.stop()  # signal stream loop; final pass always runs below
                     audio = recorder.stop()
                     mode = _effective_output_mode()
                     if mode == "precompute":
@@ -2190,7 +2385,9 @@ def run():
                         precomputer.stop()
                     pre_state = precomputer.snapshot()
 
-                    def _finish(audio=audio, preview=streamer.last_preview, pre_state=pre_state):
+                    def _finish(
+                        audio=audio, preview=streamer.last_preview, pre_state=pre_state
+                    ):
                         # Show "processing" with the last streaming preview so the
                         # user sees what was recognised so far while we finalise.
                         mode = _effective_output_mode()
@@ -2200,7 +2397,9 @@ def run():
                         log(f"Finalize mode: {mode!r}")
                         if mode == "precompute":
                             base_text, base_samples = pre_state
-                            _finish_precompute(audio, overlay, tray, t0, base_text, base_samples)
+                            _finish_precompute(
+                                audio, overlay, tray, t0, base_text, base_samples
+                            )
                         elif mode == "stabilized":
                             _finish_stabilized(audio, overlay, tray, t0)
                         else:

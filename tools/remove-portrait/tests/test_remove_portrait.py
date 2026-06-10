@@ -31,22 +31,34 @@ class RemovePortraitTests(unittest.TestCase):
 
             output_path = self.module.build_default_output_path(video_path, max_width=0)
 
-            self.assertEqual(video_path.with_name("clip_portrait_removed_2.mov"), output_path)
+            self.assertEqual(
+                video_path.with_name("clip_portrait_removed_2.mov"), output_path
+            )
 
     def test_default_output_path_can_include_preview_width(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             video_path = pathlib.Path(temp_dir) / "clip.mkv"
             video_path.write_bytes(b"fake")
 
-            output_path = self.module.build_default_output_path(video_path, max_width=960)
+            output_path = self.module.build_default_output_path(
+                video_path, max_width=960
+            )
 
-            self.assertEqual(video_path.with_name("clip_portrait_removed_960w.mov"), output_path)
+            self.assertEqual(
+                video_path.with_name("clip_portrait_removed_960w.mov"), output_path
+            )
 
     def test_model_normalization_accepts_supported_models(self):
         self.assertEqual("u2net_human_seg", self.module.normalize_model(""))
-        self.assertEqual("u2net_human_seg", self.module.normalize_model("u2net_human_seg"))
-        self.assertEqual("isnet-general-use", self.module.normalize_model("isnet-general-use"))
-        self.assertEqual("birefnet-portrait", self.module.normalize_model("birefnet-portrait"))
+        self.assertEqual(
+            "u2net_human_seg", self.module.normalize_model("u2net_human_seg")
+        )
+        self.assertEqual(
+            "isnet-general-use", self.module.normalize_model("isnet-general-use")
+        )
+        self.assertEqual(
+            "birefnet-portrait", self.module.normalize_model("birefnet-portrait")
+        )
 
     def test_model_normalization_rejects_unknown_model(self):
         with self.assertRaises(ValueError):
@@ -70,7 +82,7 @@ class RemovePortraitTests(unittest.TestCase):
 
     def test_alpha_mov_command_can_map_optional_audio(self):
         command = self.module.build_alpha_mov_command(
-            ffmpeg=pathlib.Path(r"C:\dev\tools\ffmpeg.exe"),
+            ffmpeg=pathlib.Path(r"E:\dev\tools\ffmpeg.exe"),
             frame_pattern=pathlib.Path("frames/%06d.png"),
             input_path=pathlib.Path("input.mkv"),
             output_path=pathlib.Path("output.mov"),
@@ -84,7 +96,7 @@ class RemovePortraitTests(unittest.TestCase):
 
     def test_raw_alpha_mov_command_streams_rgba(self):
         command = self.module.build_raw_alpha_mov_command(
-            ffmpeg=pathlib.Path(r"C:\dev\tools\ffmpeg.exe"),
+            ffmpeg=pathlib.Path(r"E:\dev\tools\ffmpeg.exe"),
             width=3840,
             height=2160,
             fps=30,
@@ -103,7 +115,7 @@ class RemovePortraitTests(unittest.TestCase):
 
     def test_raw_alpha_mov_command_can_use_prores_4444(self):
         command = self.module.build_raw_alpha_mov_command(
-            ffmpeg=pathlib.Path(r"C:\dev\tools\ffmpeg.exe"),
+            ffmpeg=pathlib.Path(r"E:\dev\tools\ffmpeg.exe"),
             width=3840,
             height=2160,
             fps=30,

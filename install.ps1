@@ -18,7 +18,7 @@ param(
 )
 
 $RepoDir  = Split-Path -Parent $MyInvocation.MyCommand.Path   # auto-resolved; move the repo freely
-$ToolsDir = "C:\dev\tools"                                    # directory on your PATH
+$ToolsDir = "E:\dev\tools"                                    # directory on your PATH
 
 . (Join-Path $RepoDir "install-lib.ps1")
 
@@ -43,14 +43,14 @@ if (Test-Path $dotEnvPath) {
     Write-Host "  [env]  No .env found - copy .env.example to .env and fill in your keys." -ForegroundColor Yellow
 }
 
-# Hard-fail if OPENROUTER_API_KEY is missing (required by OpenRouter-backed AI tools).
+# Warn if OPENROUTER_API_KEY looks like a placeholder (not a real key)
 if (-not $env:OPENROUTER_API_KEY) {
     Write-Host ""
-    Write-Host "ERROR: OPENROUTER_API_KEY is not set." -ForegroundColor Red
-    Write-Host "  1. Copy .env.example to .env at the repo root" -ForegroundColor Yellow
-    Write-Host "  2. Set OPENROUTER_API_KEY=sk-or-..." -ForegroundColor Yellow
+    Write-Host "WARNING: OPENROUTER_API_KEY is not set." -ForegroundColor Yellow
+    Write-Host "  AI tools (video-titles, generate-from-image, img-gen, video-gen) will not work." -ForegroundColor Yellow
     Write-Host "  Get a key at: https://openrouter.ai/keys" -ForegroundColor Yellow
-    exit 1
+    Write-Host "  Then add it to .env: OPENROUTER_API_KEY=sk-or-..." -ForegroundColor Yellow
+    Write-Host ""
 }
 
 # ---------------------------------------------------------------------------
@@ -222,30 +222,34 @@ call "$RepoDir\tools\img-to-svg\img-to-svg.bat" %*
 "@
 
 # ---------------------------------------------------------------------------
-# scale-monitor — taskbar shortcut (no bat stub needed; launched via shortcut)
+# scale-monitor — SKIPPED: this tool is hardcoded to a specific monitor model (HG584T05, DISPLAY4)
+# and will not work on this machine. Uncomment if you have a compatible display.
 # ---------------------------------------------------------------------------
-$vbsPath      = "$RepoDir\tools\scale-monitor\scale-monitor.vbs"
-$shortcutPath = Join-Path $ToolsDir "Scale Monitor.lnk"
-$wsh          = New-Object -ComObject WScript.Shell
-$sc           = $wsh.CreateShortcut($shortcutPath)
-$sc.TargetPath       = "wscript.exe"
-$sc.Arguments        = "`"$vbsPath`""
-$sc.WorkingDirectory = "$RepoDir\tools\scale-monitor"
-$sc.Description      = "Toggle Monitor 4 scale between 200% (normal) and 300% (filming)"
-$sc.IconLocation     = "%SystemRoot%\System32\imageres.dll,109"
-$sc.Save()
-Write-Host "  [lnk]  $shortcutPath" -ForegroundColor Green
+# $vbsPath      = "$RepoDir\tools\scale-monitor\scale-monitor.vbs"
+# $shortcutPath = Join-Path $ToolsDir "Scale Monitor.lnk"
+# $wsh          = New-Object -ComObject WScript.Shell
+# $sc           = $wsh.CreateShortcut($shortcutPath)
+# $sc.TargetPath       = "wscript.exe"
+# $sc.Arguments        = "`"$vbsPath`""
+# $sc.WorkingDirectory = "$RepoDir\tools\scale-monitor"
+# $sc.Description      = "Toggle Monitor 4 scale between 200% (normal) and 300% (filming)"
+# $sc.IconLocation     = "%SystemRoot%\System32\imageres.dll,109"
+# $sc.Save()
+# Write-Host "  [lnk]  $shortcutPath" -ForegroundColor Green
+# 
+# # Also place in Start Menu so Windows Search finds it (Win key + type)
+# $startMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Scale Monitor.lnk"
+# $scSm = $wsh.CreateShortcut($startMenuPath)
+# $scSm.TargetPath       = "wscript.exe"
+# $scSm.Arguments        = "`"$vbsPath`""
+# $scSm.WorkingDirectory = "$RepoDir\tools\scale-monitor"
+# $scSm.Description      = "Toggle Monitor 4 scale between 200% (normal) and 300% (filming)"
+# $scSm.IconLocation     = "%SystemRoot%\System32\imageres.dll,109"
+# $scSm.Save()
+# Write-Host "  [lnk]  $startMenuPath" -ForegroundColor Green
 
-# Also place in Start Menu so Windows Search finds it (Win key + type)
-$startMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Scale Monitor.lnk"
-$scSm = $wsh.CreateShortcut($startMenuPath)
-$scSm.TargetPath       = "wscript.exe"
-$scSm.Arguments        = "`"$vbsPath`""
-$scSm.WorkingDirectory = "$RepoDir\tools\scale-monitor"
-$scSm.Description      = "Toggle Monitor 4 scale between 200% (normal) and 300% (filming)"
-$scSm.IconLocation     = "%SystemRoot%\System32\imageres.dll,109"
-$scSm.Save()
-Write-Host "  [lnk]  $startMenuPath" -ForegroundColor Green
+# WScript.Shell instance for creating .lnk shortcuts
+$wsh = New-Object -ComObject WScript.Shell
 
 # ---------------------------------------------------------------------------
 # task-stats — bat stub (terminal launch) + taskbar shortcut
@@ -255,7 +259,7 @@ Write-BatStub "task-stats" @"
 wscript.exe "$RepoDir\tools\task-stats\task-stats.vbs"
 "@
 
-# task-stats shortcut (C:\dev\tools + Start Menu so Windows Search finds it)
+# task-stats shortcut (E:\dev\tools + Start Menu so Windows Search finds it)
 $tmVbsPath      = "$RepoDir\tools\task-stats\task-stats.vbs"
 $tmShortcutPath = Join-Path $ToolsDir "Task Stats.lnk"
 $tmSc           = $wsh.CreateShortcut($tmShortcutPath)
@@ -402,11 +406,11 @@ $videoExts = @('.mp4', '.mkv', '.avi', '.mov', '.wmv', '.webm', '.m4v', '.mpg', 
 foreach ($ext in $videoExts) {
     $root = "HKCU:\Software\Classes\SystemFileAssociations\$ext\shell\MikesTools"
     Set-MikesToolsRoot $root $wrenchIco
-    Add-MikesVerb $root "Transcribe"        "Transcribe Video"    $filmIco        'cmd.exe /k ""C:\dev\tools\transcribe.bat" "%1""'
-    Add-MikesVerb $root "VideoTitles"      "Video Titles"        $titlesIco      'cmd.exe /k ""C:\dev\tools\video-titles.bat" "%1""'
-    Add-MikesVerb $root "VideoDescription" "Video Description"   $descriptionIco 'cmd.exe /k ""C:\dev\tools\video-description.bat" "%1""'
-    Add-MikesVerb $root "RemovePortrait"   "Remove Portrait Background" $portraitIco 'cmd.exe /k ""C:\dev\tools\remove-portrait.bat" "%1""'
-    Add-MikesVerb $root "Vid2md"           "Video to Markdown"   $linkPageIco    'cmd.exe /k ""C:\dev\tools\video-to-markdown.bat" "%1""'
+    Add-MikesVerb $root "Transcribe"        "Transcribe Video"    $filmIco        'cmd.exe /k ""E:\dev\tools\transcribe.bat" "%1""'
+    Add-MikesVerb $root "VideoTitles"      "Video Titles"        $titlesIco      'cmd.exe /k ""E:\dev\tools\video-titles.bat" "%1""'
+    Add-MikesVerb $root "VideoDescription" "Video Description"   $descriptionIco 'cmd.exe /k ""E:\dev\tools\video-description.bat" "%1""'
+    Add-MikesVerb $root "RemovePortrait"   "Remove Portrait Background" $portraitIco 'cmd.exe /k ""E:\dev\tools\remove-portrait.bat" "%1""'
+    Add-MikesVerb $root "Vid2md"           "Video to Markdown"   $linkPageIco    'cmd.exe /k ""E:\dev\tools\video-to-markdown.bat" "%1""'
 }
 
 # --- removebg: image file extensions ---
@@ -414,17 +418,17 @@ $imageExts = @('.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tiff', '.tif')
 foreach ($ext in $imageExts) {
     $root = "HKCU:\Software\Classes\SystemFileAssociations\$ext\shell\MikesTools"
     Set-MikesToolsRoot $root $wrenchIco
-    Add-MikesVerb $root "RemoveBg"           "Remove Background"    $pictureIco 'cmd.exe /k ""C:\dev\tools\removebg.bat" "%1""'
-    Add-MikesVerb $root "ImgUpscale"         "Upscale Image"        $pictureIco 'cmd.exe /k ""C:\dev\tools\img-upscale.bat" "%1""'
-    Add-MikesVerb $root "GenerateFromImage" "Generate from Image"  $wandIco    'cmd.exe /k ""C:\dev\tools\generate-from-image.bat" "%1""'
-    Add-MikesVerb $root "ImgToSvg"          "Convert to SVG"       $imgToSvgIco 'cmd.exe /k ""C:\dev\tools\img-to-svg.bat" "%1""'
+    Add-MikesVerb $root "RemoveBg"           "Remove Background"    $pictureIco 'cmd.exe /k ""E:\dev\tools\removebg.bat" "%1""'
+    Add-MikesVerb $root "ImgUpscale"         "Upscale Image"        $pictureIco 'cmd.exe /k ""E:\dev\tools\img-upscale.bat" "%1""'
+    Add-MikesVerb $root "GenerateFromImage" "Generate from Image"  $wandIco    'cmd.exe /k ""E:\dev\tools\generate-from-image.bat" "%1""'
+    Add-MikesVerb $root "ImgToSvg"          "Convert to SVG"       $imgToSvgIco 'cmd.exe /k ""E:\dev\tools\img-to-svg.bat" "%1""'
     Add-MikesVerb $root "FaceSwap"          "Face Swap"            $faceSwapIco "wscript.exe `"$RepoDir\tools\face-swap\face-swap.vbs`" `"%1`""
 }
 
 # --- svg-to-png: SVG files ---
 $svgRoot = "HKCU:\Software\Classes\SystemFileAssociations\.svg\shell\MikesTools"
 Set-MikesToolsRoot $svgRoot $wrenchIco
-Add-MikesVerb $svgRoot "SvgToPng" "Render to PNG (2048px min)" $svgIco 'cmd.exe /k ""C:\dev\tools\svg-to-png.bat" "%1""'
+Add-MikesVerb $svgRoot "SvgToPng" "Render to PNG (2048px min)" $svgIco 'cmd.exe /k ""E:\dev\tools\svg-to-png.bat" "%1""'
 
 # --- 3d-viewer: GLB files (context menu) ---
 $glbRoot = "HKCU:\Software\Classes\SystemFileAssociations\.glb\shell\MikesTools"
@@ -459,30 +463,30 @@ Write-Host "  [reg]  .glb default open: $progId" -ForegroundColor Green
 # --- vid2md: Internet Shortcut files (.url) - YouTube links ---
 $urlRoot = "HKCU:\Software\Classes\SystemFileAssociations\.url\shell\MikesTools"
 Set-MikesToolsRoot $urlRoot $wrenchIco
-Add-MikesVerb $urlRoot "Vid2md" "Video to Markdown" $linkPageIco 'cmd.exe /k ""C:\dev\tools\video-to-markdown.bat" "%1""'
+Add-MikesVerb $urlRoot "Vid2md" "Video to Markdown" $linkPageIco 'cmd.exe /k ""E:\dev\tools\video-to-markdown.bat" "%1""'
 
 # --- ghopen + vid2md: folders (right-click on folder icon) and folder background ---
-$vid2mdCmd = 'cmd.exe /k ""C:\dev\tools\video-to-markdown.bat" "%1""'
+$vid2mdCmd = 'cmd.exe /k ""E:\dev\tools\video-to-markdown.bat" "%1""'
 
 # Directory - right-clicking a folder item; %1 = folder path
 $dirRoot = "HKCU:\Software\Classes\Directory\shell\MikesTools"
 Set-MikesToolsRoot $dirRoot $wrenchIco
-Add-MikesVerb $dirRoot "GhOpen"           "Open on GitHub"     $worldIco       'cmd.exe /k "cd /d "%1" && "C:\dev\tools\ghopen.bat""'
+Add-MikesVerb $dirRoot "GhOpen"           "Open on GitHub"     $worldIco       'cmd.exe /k "cd /d "%1" && "E:\dev\tools\ghopen.bat""'
 Add-MikesVerb $dirRoot "ImgGen"           "Image Gen"          $imgGenIco      "wscript.exe `"$RepoDir\tools\img-gen\img-gen.vbs`" `"%1`""
 Add-MikesVerb $dirRoot "VideoGen"         "Video Gen"          $videoGenIco    "wscript.exe `"$RepoDir\tools\video-gen\video-gen.vbs`" `"%1`""
 Add-MikesVerb $dirRoot "FaceSwap"         "Face Swap"          $faceSwapIco    "wscript.exe `"$RepoDir\tools\face-swap\face-swap.vbs`" `"%1`""
-Add-MikesVerb $dirRoot "VideoDescription" "Video Description"  $descriptionIco 'cmd.exe /k ""C:\dev\tools\video-description.bat" "%1""'
+Add-MikesVerb $dirRoot "VideoDescription" "Video Description"  $descriptionIco 'cmd.exe /k ""E:\dev\tools\video-description.bat" "%1""'
 Add-MikesVerb $dirRoot "Vid2md"           "Video to Markdown"  $linkPageIco    $vid2mdCmd
 
 # Directory\Background - right-clicking inside an open folder; %V = current folder
 $bgRoot = "HKCU:\Software\Classes\Directory\Background\shell\MikesTools"
 Set-MikesToolsRoot $bgRoot $wrenchIco
-Add-MikesVerb $bgRoot "GhOpen"           "Open on GitHub"     $worldIco       'cmd.exe /k "cd /d "%V" && "C:\dev\tools\ghopen.bat""'
+Add-MikesVerb $bgRoot "GhOpen"           "Open on GitHub"     $worldIco       'cmd.exe /k "cd /d "%V" && "E:\dev\tools\ghopen.bat""'
 Add-MikesVerb $bgRoot "ImgGen"           "Image Gen"          $imgGenIco      "wscript.exe `"$RepoDir\tools\img-gen\img-gen.vbs`" `"%V`""
 Add-MikesVerb $bgRoot "VideoGen"         "Video Gen"          $videoGenIco    "wscript.exe `"$RepoDir\tools\video-gen\video-gen.vbs`" `"%V`""
 Add-MikesVerb $bgRoot "FaceSwap"         "Face Swap"          $faceSwapIco    "wscript.exe `"$RepoDir\tools\face-swap\face-swap.vbs`" `"%V`""
-Add-MikesVerb $bgRoot "VideoDescription" "Video Description"  $descriptionIco 'cmd.exe /k ""C:\dev\tools\video-description.bat" "%V""'
-Add-MikesVerb $bgRoot "Vid2md"           "Video to Markdown"  $linkPageIco    'cmd.exe /k "C:\dev\tools\video-to-markdown.bat"'
+Add-MikesVerb $bgRoot "VideoDescription" "Video Description"  $descriptionIco 'cmd.exe /k ""E:\dev\tools\video-description.bat" "%V""'
+Add-MikesVerb $bgRoot "Vid2md"           "Video to Markdown"  $linkPageIco    'cmd.exe /k "E:\dev\tools\video-to-markdown.bat"'
 
 # --- vid2md: all files and folders via AllFilesystemObjects ---
 # AllFilesystemObjects is a Windows shell class that matches every file and folder.
@@ -533,7 +537,6 @@ Write-Host "Done. To update tools in future: git pull (no reinstall needed)." -F
 Write-Host "To add a new tool: create its subfolder, then re-run install.ps1." -ForegroundColor Yellow
 Write-Host "To skip dependency checks: install.ps1 -SkipDeps" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "Reminder: right-click 'Scale Monitor.lnk' in $ToolsDir and pin to taskbar." -ForegroundColor Cyan
 Write-Host "Reminder: right-click 'Task Stats.lnk' in $ToolsDir and pin to taskbar." -ForegroundColor Cyan
 Write-Host "Reminder: right-click 'Voice Type.lnk' in $ToolsDir and pin to taskbar (or run on login)." -ForegroundColor Cyan
 Write-Host "Reminder: if double-clicking .glb files doesn't open 3D Viewer, go to Settings > Default Apps > choose by file type > .glb." -ForegroundColor Cyan

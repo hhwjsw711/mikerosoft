@@ -42,8 +42,10 @@ if ($missingPackages.Count -gt 0) {
     }
 }
 
-$exePath = "C:\dev\tools\realesrgan-ncnn-vulkan.exe"
-$modelsDir = "C:\dev\tools\models"
+$repoRoot = Resolve-Path "$PSScriptRoot\..\.."
+$toolsDir = Resolve-Path "$repoRoot\..\..\tools"
+$exePath = "$toolsDir\realesrgan-ncnn-vulkan.exe"
+$modelsDir = "$toolsDir\models"
 $modelParam = Join-Path $modelsDir "realesrgan-x4plus.param"
 $modelBin = Join-Path $modelsDir "realesrgan-x4plus.bin"
 
@@ -60,7 +62,7 @@ if ((Test-Path $modelParam) -and (Test-Path $modelBin)) {
     return
 }
 
-Write-Host "    WARNING  fast backend model files missing under C:\dev\tools\models" -ForegroundColor Yellow
+Write-Host "    WARNING  fast backend model files missing under $modelsDir" -ForegroundColor Yellow
 Write-Host "    Expected for the optional fast backend:" -ForegroundColor Yellow
-Write-Host "      - C:\dev\tools\models\realesrgan-x4plus.param" -ForegroundColor Yellow
-Write-Host "      - C:\dev\tools\models\realesrgan-x4plus.bin" -ForegroundColor Yellow
+Write-Host "      - $modelParam" -ForegroundColor Yellow
+Write-Host "      - $modelBin" -ForegroundColor Yellow

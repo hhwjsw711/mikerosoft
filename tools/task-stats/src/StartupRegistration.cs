@@ -33,7 +33,9 @@ public sealed class RegistryStartupRegistration : IStartupRegistration {
                 if (enable) key.SetValue(_valueName, BuildCommand(scriptDir));
                 else key.DeleteValue(_valueName, false);
             }
-        } catch { }
+        } catch (Exception ex) {
+            System.Diagnostics.Debug.WriteLine($"[StartupRegistration] Failed: {ex.Message}");
+        }
     }
 
     public string BuildCommand(string scriptDir) {

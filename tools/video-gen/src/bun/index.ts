@@ -18,7 +18,7 @@ fs.mkdirSync(path.dirname(logPath), { recursive: true });
 
 function log(msg: string) {
   const line = `${new Date().toISOString()} ${msg}\n`;
-  fs.appendFileSync(logPath, line);
+  fs.appendFile(logPath, line, () => {});
   console.log(msg);
 }
 
@@ -233,3 +233,7 @@ for (const delay of [150, 500, 1000]) {
     pulseWindowSize();
   }, delay);
 }
+
+process.on("exit", () => {
+  try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
+});

@@ -19,11 +19,22 @@ if ($installed -eq "ok") {
 }
 
 # --- StarVector (AI engine) ---
-# Clone the repo to C:\dev\tools\star-vector then do a no-deps editable install.
+# Clone the repo to E:\dev\tools\star-vector then do a no-deps editable install.
 # We intentionally skip flash_attn (not needed - code has a graceful fallback)
 # and cairosvg (not needed - we extract the raw SVG string directly).
+#
+# StarVector needs 8-16 GB VRAM; skip on machines without NVIDIA GPU.
 
-$starVectorDir = "C:\dev\tools\star-vector"
+$hasGpu = $false
+try { $hasGpu = (Get-CimInstance -ClassName Win32_VideoController | Where-Object { $_.Name -like "*NVIDIA*" }).Count -gt 0 } catch {}
+if (-not $hasGpu) {
+    Write-Host "    INFO No NVIDIA GPU detected; skipping StarVector (AI engine). vtracer will be used." -ForegroundColor DarkGray
+    return
+}
+
+$repoRoot = Resolve-Path "$PSScriptRoot\..\.."
+$toolsDir = Resolve-Path "$repoRoot\..\..\tools"
+$starVectorDir = "$toolsDir\star-vector"
 
 if (Test-Path $starVectorDir) {
     Write-Host "    OK  star-vector repo already present at $starVectorDir" -ForegroundColor Green

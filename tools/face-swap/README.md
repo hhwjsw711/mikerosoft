@@ -33,7 +33,7 @@ The result is automatically saved beside the original target image with `_face-s
 
 - Python on `PATH`
 - Python packages installed by `deps.ps1`: `insightface`, `onnxruntime` / `onnxruntime-gpu`, `opencv-python`
-- `inswapper_128.onnx` model in `%LOCALAPPDATA%\face-swap\models\inswapper_128.onnx`
+- `inswapper_128.onnx` model in `<repo>\..\..\tools\_models\face-swap\inswapper_128.onnx`
 
 The model can be downloaded automatically from inside the app on first run.
 

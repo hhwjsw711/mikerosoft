@@ -173,7 +173,9 @@ function scanVerbs([string]$hive, [string]$sub, [string]$applies) {
             $e.ReadPath="$hw\$sub\$v"; $e.ShadowPath="$base\$v"
             $e.Enabled=-not(isVerbDisabled $e.ReadPath $e.ShadowPath); $e.IsSubmenu=$isSub
             $out.Add($e)
-        } catch { }
+        } catch {
+            Write-Warning "Failed to scan verb entry '${v}' under ${hw}\${sub}: $_"
+        }
     }
     $shell.Close(); return $out
 }
@@ -202,7 +204,7 @@ function scanShellEx([string]$hive, [string]$sub, [string]$applies) {
             $e.Kind='ShellEx'; $e.ReadPath="$hw\$sub\$n"; $e.ShadowPath="$base\$n"
             $e.ClsId=$cls; $e.Enabled=-not(isShellExDisabled $e.ReadPath $e.ShadowPath)
             $out.Add($e)
-        } catch { }
+        } catch { Write-Warning "Failed to scan ShellEx '${n}' under ${hw}\${sub}: $_" }
     }
     $h.Close(); return $out
 }
@@ -231,7 +233,7 @@ function scanExtGroup([string[]]$exts, [string]$type) {
                         $seen[$v]=$e; $paths[$v]=[System.Collections.Generic.List[string]]::new()
                     }
                     $paths[$v].Add($sp)
-                } catch { }
+                } catch { Write-Warning "Failed to scan verb '${v}' for file type '${type}': $_" }
             }
             $shell.Close()
         }
@@ -272,7 +274,7 @@ function scanProgIdShell([string[]]$exts, [string]$applies) {
                 $e.Enabled     = -not (isVerbDisabled $e.ReadPath $e.ShadowPath)
                 $e.IsSubmenu   = $isSub
                 $out.Add($e)
-            } catch { }
+            } catch { Write-Warning "Failed to scan ProgId verb '${v}' for '${progId}': $_" }
         }
         $shellKey.Close()
     }
@@ -334,7 +336,7 @@ function applyEntry([CmEntry]$entry, [bool]$enable) {
                     else { $k.SetValue('LegacyDisable','', [Microsoft.Win32.RegistryValueKind]::String) }
                     $k.Close()
                 }
-            } catch { }
+            } catch { Write-Warning "Failed to toggle verb '${entry.Label}': $_" }
         }
     } else {
         try {
@@ -345,7 +347,7 @@ function applyEntry([CmEntry]$entry, [bool]$enable) {
                     [Microsoft.Win32.RegistryValueKind]::String)
                 $k.Close()
             }
-        } catch { }
+            } catch { Write-Warning "Failed to toggle ShellEx '${entry.Label}': $_" }
     }
 }
 function notifyShell {
@@ -420,7 +422,7 @@ function paintList([System.Windows.Forms.PaintEventArgs]$pe, [int]$panelW) {
         # ---- background
         $bgC = if ($hov) { $C_ROW_HOV } elseif ($item.Enabled) { $C_ROW } else { $C_ROW_DIS }
         $bgB = [System.Drawing.SolidBrush]::new($bgC)
-        $g.FillRectangle($bgB, 0, $y, $panelW, $ROW_H); $bgB.Dispose()
+        try { $g.FillRectangle($bgB, 0, $y, $panelW, $ROW_H) } finally { $bgB.Dispose() }
 
         # ---- icon
         $bmp = getEntryBitmap $item
@@ -456,16 +458,16 @@ function paintList([System.Windows.Forms.PaintEventArgs]$pe, [int]$panelW) {
             $btnClr   = if ($item.Enabled) { $C_BTN_HIDE } else { $C_BTN_SHOW }
             $btnRect  = New-Object System.Drawing.Rectangle(($panelW - $BTN_W - 6), ($y+5), $BTN_W, ($ROW_H-10))
             $btnPen   = New-Object System.Drawing.Pen($btnClr, 1)
-            $g.DrawRectangle($btnPen, $btnRect); $btnPen.Dispose()
+            try { $g.DrawRectangle($btnPen, $btnRect) } finally { $btnPen.Dispose() }
             $btnBrush = New-Object System.Drawing.SolidBrush($btnClr)
-            $g.FillRectangle($btnBrush, $btnRect); $btnBrush.Dispose()
+            try { $g.FillRectangle($btnBrush, $btnRect) } finally { $btnBrush.Dispose() }
             $wB = [System.Drawing.Brushes]::White
             $g.DrawString($btnLabel, $GDI.fontBtn, $wB, [System.Drawing.RectangleF]::op_Implicit($btnRect), $GDI.sfCenter)
         }
 
         # ---- separator
         $sepP = New-Object System.Drawing.Pen($C_SEP, 1)
-        $g.DrawLine($sepP, 0, ($y+$ROW_H-1), $panelW, ($y+$ROW_H-1)); $sepP.Dispose()
+        try { $g.DrawLine($sepP, 0, ($y+$ROW_H-1), $panelW, ($y+$ROW_H-1)) } finally { $sepP.Dispose() }
 
         $y += $ROW_H
     }
